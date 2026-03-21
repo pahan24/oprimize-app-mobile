@@ -36,9 +36,11 @@ import { Device } from '@capacitor/device';
 import { StatusBar, Style } from '@capacitor/status-bar';
 import { SplashScreen } from '@capacitor/splash-screen';
 import { Network } from '@capacitor/network';
+import { Filesystem } from '@capacitor/filesystem';
+import { App as CapacitorApp } from '@capacitor/app';
 
 // --- Types ---
-type Tab = 'dashboard' | 'cleaner' | 'booster' | 'battery' | 'cooler' | 'storage' | 'apps' | 'network' | 'security' | 'game';
+type Tab = 'dashboard' | 'cleaner' | 'booster' | 'battery' | 'cooler' | 'storage' | 'apps' | 'network' | 'security' | 'game' | 'settings';
 
 interface AppInfo {
   id: string;
@@ -54,6 +56,11 @@ interface BatteryStatus {
   charging: boolean;
   chargingTime: number;
   dischargingTime: number;
+}
+
+interface NetworkStatus {
+  connected: boolean;
+  connectionType: string;
 }
 
 // --- Mock Data ---
@@ -108,6 +115,7 @@ const Header = ({ title, onBack }: { title: string; onBack?: () => void }) => (
     {!onBack && (
       <motion.div 
         whileHover={{ rotate: 90 }}
+        onClick={() => onBack ? null : (window as any).navigateToSettings?.()}
         className="p-2 rounded-full bg-white/5 cursor-pointer"
       >
         <Settings size={20} />
@@ -151,7 +159,7 @@ const BottomNav = ({ activeTab, onNavigate }: { activeTab: Tab; onNavigate: (tab
 
 // --- Views ---
 
-const Dashboard = ({ onNavigate, battery, deviceInfo }: { onNavigate: (tab: Tab) => void; battery: BatteryStatus | null; deviceInfo: any }) => {
+const Dashboard = ({ onNavigate, battery, deviceInfo, showToast }: { onNavigate: (tab: Tab) => void; battery: BatteryStatus | null; deviceInfo: any; showToast: (m: string, t?: any) => void }) => {
   const [healthScore, setHealthScore] = useState(85);
   const [isBoosting, setIsBoosting] = useState(false);
   const [memory, setMemory] = useState<{ used: number; total: number } | null>(null);
@@ -182,6 +190,7 @@ const Dashboard = ({ onNavigate, battery, deviceInfo }: { onNavigate: (tab: Tab)
     setTimeout(() => {
       setHealthScore(100);
       setIsBoosting(false);
+      showToast('System Fully Optimized', 'success');
     }, 2500);
   };
 
@@ -300,10 +309,11 @@ const Dashboard = ({ onNavigate, battery, deviceInfo }: { onNavigate: (tab: Tab)
   );
 };
 
-const JunkCleaner = () => {
+const JunkCleaner = ({ showToast }: { showToast: (m: string, t?: any) => void }) => {
   const [isScanning, setIsScanning] = useState(false);
   const [junkFound, setJunkFound] = useState<number | null>(null);
   const [isCleaning, setIsCleaning] = useState(false);
+  const [scanningFile, setScanningFile] = useState('');
   const [categories, setCategories] = useState<{ name: string; size: string; icon: any }[]>([
     { name: 'System Cache', size: '0 MB', icon: Trash2 },
     { name: 'App Logs', size: '0 MB', icon: History },
@@ -314,7 +324,15 @@ const JunkCleaner = () => {
   const handleScan = () => {
     setIsScanning(true);
     setJunkFound(null);
+    const files = ['/system/cache/tmp_01.log', '/data/user/0/com.android.chrome/cache', '/storage/emulated/0/Download/temp_installer.apk', '/system/logs/crash_dump.txt', 'Cleaning memory leaks...', 'Scanning deep storage...'];
+    let i = 0;
+    const interval = setInterval(() => {
+      setScanningFile(files[i % files.length]);
+      i++;
+    }, 300);
+
     setTimeout(() => {
+      clearInterval(interval);
       setIsScanning(false);
       setJunkFound(2.4);
       setCategories([
@@ -323,7 +341,7 @@ const JunkCleaner = () => {
         { name: 'Temp Files', size: '1.1 GB', icon: RefreshCw },
         { name: 'Ad Junk', size: '140 MB', icon: AlertTriangle },
       ]);
-    }, 3000);
+    }, 4000);
   };
 
   const handleClean = () => {
@@ -332,6 +350,7 @@ const JunkCleaner = () => {
       setIsCleaning(false);
       setJunkFound(0);
       setCategories(prev => prev.map(c => ({ ...c, size: '0 MB' })));
+      showToast('2.4 GB Junk Cleaned', 'success');
     }, 2500);
   };
 
@@ -377,7 +396,12 @@ const JunkCleaner = () => {
         <h2 className="text-3xl font-display font-black mb-2 text-white">
           {isScanning ? "Scanning..." : isCleaning ? "Cleaning..." : junkFound ? `${junkFound} GB Found` : "System Clean"}
         </h2>
-        <p className="text-white/30 text-xs font-display uppercase tracking-widest max-w-[240px]">
+        {isScanning && (
+          <p className="text-neon-cyan text-[10px] font-mono truncate w-full max-w-[200px] mt-2 opacity-60">
+            {scanningFile}
+          </p>
+        )}
+        <p className="text-white/30 text-xs font-display uppercase tracking-widest max-w-[240px] mt-2">
           {junkFound ? "Optimization recommended" : "No junk files detected"}
         </p>
       </div>
@@ -415,10 +439,11 @@ const JunkCleaner = () => {
   );
 };
 
-const RAMBooster = () => {
+const RAMBooster = ({ showToast }: { showToast: (m: string, t?: any) => void }) => {
   const [isBoosting, setIsBoosting] = useState(false);
   const [freed, setFreed] = useState<number | null>(null);
   const [memory, setMemory] = useState<{ used: number; total: number }>({ used: 420, total: 2048 });
+  const [processes, setProcesses] = useState(MOCK_APPS.slice(0, 5));
 
   useEffect(() => {
     const updateMemory = () => {
@@ -441,10 +466,15 @@ const RAMBooster = () => {
 
   const handleBoost = () => {
     setIsBoosting(true);
+    setFreed(null);
     setTimeout(() => {
+      const freedAmount = Math.floor(Math.random() * 200) + 300;
       setIsBoosting(false);
-      setFreed(Math.floor(Math.random() * 200) + 300);
-    }, 2000);
+      setFreed(freedAmount);
+      setProcesses([]);
+      showToast(`${freedAmount} MB RAM Freed`, 'success');
+      setTimeout(() => setProcesses(MOCK_APPS.slice(0, 5)), 5000);
+    }, 2500);
   };
 
   const usagePercent = Math.round((memory.used / memory.total) * 100);
@@ -491,35 +521,44 @@ const RAMBooster = () => {
 
       <div className="space-y-4">
         <h3 className="text-[10px] font-display font-bold text-white/30 uppercase tracking-[0.2em]">Active Processes</h3>
-        <div className="space-y-3">
-          {MOCK_APPS.slice(0, 5).map((app, i) => (
-            <motion.div 
-              key={app.id} 
-              initial={{ opacity: 0, y: 10 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ delay: i * 0.1 }}
-              className="flex items-center gap-4 p-4 glass rounded-xl"
-            >
-              <div className="w-10 h-10 flex items-center justify-center bg-white/5 rounded-lg text-xl">
-                {app.icon}
-              </div>
-              <div className="flex-1">
-                <p className="text-sm font-display font-bold text-white/90">{app.name}</p>
-                <p className="text-[9px] text-white/30 uppercase tracking-wider">{app.size}</p>
-              </div>
-              <div className="flex flex-col items-end gap-1">
-                <span className="text-[10px] text-neon-purple font-display font-bold">{(Math.random() * 5 + 2).toFixed(1)}%</span>
-                <div className="w-1.5 h-1.5 rounded-full bg-neon-green shadow-[0_0_5px_rgba(0,255,136,1)]" />
-              </div>
-            </motion.div>
-          ))}
+        <div className="space-y-3 min-h-[100px]">
+          <AnimatePresence mode="popLayout">
+            {processes.map((app, i) => (
+              <motion.div 
+                key={app.id} 
+                initial={{ opacity: 0, y: 10 }}
+                animate={{ opacity: 1, y: 0 }}
+                exit={{ opacity: 0, scale: 0.8, x: 50 }}
+                transition={{ delay: i * 0.1 }}
+                className="flex items-center gap-4 p-4 glass rounded-xl"
+              >
+                <div className="w-10 h-10 flex items-center justify-center bg-white/5 rounded-lg text-xl">
+                  {app.icon}
+                </div>
+                <div className="flex-1">
+                  <p className="text-sm font-display font-bold text-white/90">{app.name}</p>
+                  <p className="text-[9px] text-white/30 uppercase tracking-wider">{app.size}</p>
+                </div>
+                <div className="flex flex-col items-end gap-1">
+                  <span className="text-[10px] text-neon-purple font-display font-bold">{(Math.random() * 5 + 2).toFixed(1)}%</span>
+                  <div className="w-1.5 h-1.5 rounded-full bg-neon-green shadow-[0_0_5px_rgba(0,255,136,1)]" />
+                </div>
+              </motion.div>
+            ))}
+          </AnimatePresence>
+          {processes.length === 0 && !isBoosting && (
+            <div className="text-center py-10">
+              <CheckCircle2 className="mx-auto text-neon-green mb-2" size={32} />
+              <p className="text-xs text-white/30 uppercase tracking-widest">Memory Optimized</p>
+            </div>
+          )}
         </div>
       </div>
     </div>
   );
 };
 
-const NetworkSpeed = ({ networkStatus }: { networkStatus: any }) => {
+const NetworkSpeed = ({ networkStatus, showToast }: { networkStatus: any; showToast: (m: string, t?: any) => void }) => {
   const [isTesting, setIsTesting] = useState(false);
   const [speed, setSpeed] = useState<number | null>(null);
   const [ping, setPing] = useState<number | null>(null);
@@ -529,9 +568,12 @@ const NetworkSpeed = ({ networkStatus }: { networkStatus: any }) => {
     setSpeed(null);
     setPing(null);
     setTimeout(() => {
-      setPing(Math.floor(Math.random() * 20) + 10);
-      setSpeed(Math.floor(Math.random() * 50) + 40);
+      const finalPing = Math.floor(Math.random() * 20) + 10;
+      const finalSpeed = Math.floor(Math.random() * 50) + 40;
+      setPing(finalPing);
+      setSpeed(finalSpeed);
       setIsTesting(false);
+      showToast(`Speed Test Complete: ${finalSpeed} Mbps`, 'success');
     }, 3000);
   };
 
@@ -601,7 +643,7 @@ const NetworkSpeed = ({ networkStatus }: { networkStatus: any }) => {
   );
 };
 
-const SecurityScan = () => {
+const SecurityScan = ({ showToast }: { showToast: (m: string, t?: any) => void }) => {
   const [isScanning, setIsScanning] = useState(false);
   const [status, setStatus] = useState<'idle' | 'scanning' | 'safe'>('idle');
 
@@ -611,6 +653,7 @@ const SecurityScan = () => {
     setTimeout(() => {
       setIsScanning(false);
       setStatus('safe');
+      showToast('Security Scan Complete: Device Safe', 'success');
     }, 4000);
   };
 
@@ -710,15 +753,225 @@ const SecurityScan = () => {
 
 // --- Main App ---
 
+const SettingsView = ({ showToast }: { showToast: (m: string, t?: any) => void }) => {
+  const settingsGroups = [
+    {
+      title: 'General',
+      items: [
+        { label: 'Auto Optimize', desc: 'Boost system every 6 hours', active: true },
+        { label: 'Smart Cleaning', desc: 'Auto remove junk files', active: false },
+      ]
+    },
+    {
+      title: 'Notifications',
+      items: [
+        { label: 'Battery Alerts', desc: 'Notify at 20% and 10%', active: true },
+        { label: 'Security Alerts', desc: 'Real-time threat detection', active: true },
+      ]
+    },
+    {
+      title: 'Appearance',
+      items: [
+        { label: 'Neon Glow', desc: 'Enable UI glow effects', active: true },
+        { label: 'Animations', desc: 'Smooth transitions', active: true },
+      ]
+    }
+  ];
+
+  return (
+    <div className="px-6 space-y-8 pb-32">
+      {settingsGroups.map((group) => (
+        <div key={group.title} className="space-y-4">
+          <h3 className="text-[10px] font-display font-bold text-white/30 uppercase tracking-[0.2em]">{group.title}</h3>
+          <div className="space-y-3">
+            {group.items.map((item) => (
+              <Card key={item.label} className="flex items-center justify-between p-5">
+                <div>
+                  <p className="text-sm font-display font-bold text-white/90">{item.label}</p>
+                  <p className="text-[9px] text-white/30 uppercase tracking-widest font-bold">{item.desc}</p>
+                </div>
+                <div className={cn(
+                  "w-10 h-5 rounded-full relative p-1 transition-colors",
+                  item.active ? "bg-neon-cyan/20 border-neon-cyan/40" : "bg-white/5 border-white/10"
+                )}>
+                  <motion.div 
+                    className={cn(
+                      "w-3 h-3 rounded-full",
+                      item.active ? "bg-neon-cyan shadow-[0_0_8px_rgba(0,245,255,1)]" : "bg-white/20"
+                    )}
+                    animate={{ x: item.active ? 18 : 0 }}
+                  />
+                </div>
+              </Card>
+            ))}
+          </div>
+        </div>
+      ))}
+      
+      <div className="pt-4 space-y-3">
+        <Card 
+          className="p-6 border-neon-cyan/20 bg-neon-cyan/5 cursor-pointer"
+          onClick={() => {
+            showToast('Checking for updates...', 'info');
+            setTimeout(() => showToast('App is up to date', 'success'), 2000);
+          }}
+        >
+          <div className="flex items-center gap-4 text-neon-cyan">
+            <RefreshCw size={20} />
+            <div>
+              <p className="text-sm font-display font-bold">Check for Updates</p>
+              <p className="text-[9px] uppercase tracking-widest font-bold opacity-60">Version 2.4.0</p>
+            </div>
+          </div>
+        </Card>
+
+        <Card className="p-6 border-neon-red/20 bg-neon-red/5 cursor-pointer">
+          <div className="flex items-center gap-4 text-neon-red">
+            <AlertTriangle size={20} />
+            <div>
+              <p className="text-sm font-display font-bold">Reset All Settings</p>
+              <p className="text-[9px] uppercase tracking-widest font-bold opacity-60">Restore to factory defaults</p>
+            </div>
+          </div>
+        </Card>
+      </div>
+      
+      <div className="text-center opacity-20 py-4">
+        <p className="text-[10px] font-display uppercase tracking-[0.4em]">Ultra Optimize X v2.4.0</p>
+      </div>
+    </div>
+  );
+};
+
+const Toast = ({ message, type, onClose }: { message: string; type: 'success' | 'info' | 'error'; onClose: () => void }) => (
+  <motion.div
+    initial={{ y: 100, opacity: 0 }}
+    animate={{ y: 0, opacity: 1 }}
+    exit={{ y: 100, opacity: 0 }}
+    className="fixed bottom-28 left-6 right-6 z-[100]"
+  >
+    <div className={cn(
+      "glass p-4 rounded-2xl border flex items-center gap-3 shadow-2xl",
+      type === 'success' ? "border-neon-green/30 bg-neon-green/5" : 
+      type === 'error' ? "border-neon-red/30 bg-neon-red/5" : "border-neon-cyan/30 bg-neon-cyan/5"
+    )}>
+      <div className={cn(
+        "p-2 rounded-lg",
+        type === 'success' ? "text-neon-green bg-neon-green/10" : 
+        type === 'error' ? "text-neon-red bg-neon-red/10" : "text-neon-cyan bg-neon-cyan/10"
+      )}>
+        {type === 'success' ? <CheckCircle2 size={18} /> : type === 'error' ? <AlertTriangle size={18} /> : <Info size={18} />}
+      </div>
+      <p className="text-xs font-display font-bold text-white/90 flex-1">{message}</p>
+      <button onClick={onClose} className="text-white/20 hover:text-white/40">
+        <X size={16} />
+      </button>
+    </div>
+  </motion.div>
+);
+
+const CPUCooler = ({ showToast }: { showToast: (m: string, t?: any) => void }) => {
+  const [isBoosting, setIsBoosting] = useState(false);
+
+  return (
+    <div className="px-6 space-y-8 pb-32">
+      <div className="flex flex-col items-center justify-center py-12 text-center">
+        <div className="relative w-48 h-48 mb-8 flex items-center justify-center">
+          <motion.div 
+            className="absolute inset-0 bg-neon-cyan/5 rounded-full blur-3xl"
+            animate={{ scale: [1, 1.3, 1], opacity: [0.2, 0.4, 0.2] }}
+            transition={{ duration: 5, repeat: Infinity }}
+          />
+          <div className="relative z-10 flex flex-col items-center">
+            <Thermometer size={80} className="text-neon-cyan mb-4 drop-shadow-[0_0_20px_rgba(0,245,255,0.4)]" />
+            <motion.span 
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              className="text-5xl font-display font-black text-white"
+            >
+              {isBoosting ? '28°C' : '34°C'}
+            </motion.span>
+          </div>
+          <motion.div 
+            className="absolute inset-0 rounded-full border border-neon-cyan/20"
+            animate={{ rotate: 360 }}
+            transition={{ duration: 10, repeat: Infinity, ease: "linear" }}
+          />
+          <motion.div 
+            className="absolute inset-4 rounded-full border border-dashed border-neon-cyan/10"
+            animate={{ rotate: -360 }}
+            transition={{ duration: 15, repeat: Infinity, ease: "linear" }}
+          />
+        </div>
+        <h2 className="text-2xl font-display font-black text-white mb-1">Temperature: {isBoosting ? 'Cooling...' : 'Normal'}</h2>
+        <p className="text-white/30 uppercase tracking-[0.3em] text-[10px] font-bold">{isBoosting ? 'Optimizing CPU cycles' : 'CPU is running cool'}</p>
+      </div>
+
+      <motion.button 
+        whileHover={{ scale: 1.02 }}
+        whileTap={{ scale: 0.98 }}
+        onClick={() => {
+          setIsBoosting(true);
+          setTimeout(() => {
+            setIsBoosting(false);
+            showToast('CPU Cooled Successfully', 'success');
+          }, 3000);
+        }}
+        disabled={isBoosting}
+        className="w-full py-5 rounded-2xl bg-neon-cyan text-bg-deep font-display font-bold text-lg tracking-[0.2em] uppercase neon-glow-cyan"
+      >
+        {isBoosting ? 'Cooling Down...' : 'Cool Down Now'}
+      </motion.button>
+
+      <div className="space-y-4">
+        <h3 className="text-[10px] font-display font-bold text-white/30 uppercase tracking-[0.2em]">Heat Sources</h3>
+        <div className="space-y-3">
+          {[
+            { name: 'System UI', impact: 'Low', icon: Cpu },
+            { name: 'Background Apps', impact: 'Minimal', icon: Layers },
+            { name: 'Display', impact: 'Moderate', icon: Info },
+          ].map((item, i) => (
+            <motion.div 
+              key={item.name}
+              initial={{ opacity: 0, y: 10 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ delay: i * 0.1 }}
+              className="flex items-center gap-4 p-4 glass rounded-xl"
+            >
+              <div className="p-2 rounded-lg bg-white/5 text-neon-cyan">
+                <item.icon size={18} />
+              </div>
+              <span className="flex-1 text-sm font-display text-white/60 font-medium">{item.name}</span>
+              <span className="text-[9px] font-display font-bold uppercase tracking-widest text-neon-cyan">
+                {item.impact}
+              </span>
+            </motion.div>
+          ))}
+        </div>
+      </div>
+    </div>
+  );
+};
+
 export default function App() {
   const [activeTab, setActiveTab] = useState<Tab>('dashboard');
   const [viewStack, setViewStack] = useState<Tab[]>(['dashboard']);
   const [isSplash, setIsSplash] = useState(true);
   const [battery, setBattery] = useState<BatteryStatus | null>(null);
   const [deviceInfo, setDeviceInfo] = useState<any>(null);
-  const [networkStatus, setNetworkStatus] = useState<any>(null);
+  const [networkStatus, setNetworkStatus] = useState<NetworkStatus | null>(null);
+  const [storageInfo, setStorageInfo] = useState<{ free: number; total: number } | null>(null);
+  const [apps, setApps] = useState(MOCK_APPS);
+  const [isLaunchingGame, setIsLaunchingGame] = useState<string | null>(null);
+  const [toast, setToast] = useState<{ message: string; type: 'success' | 'info' | 'error' } | null>(null);
+
+  const showToast = (message: string, type: 'success' | 'info' | 'error' = 'info') => {
+    setToast({ message, type });
+    setTimeout(() => setToast(null), 3000);
+  };
 
   useEffect(() => {
+    (window as any).navigateToSettings = () => navigateTo('settings');
     // Initialize Capacitor features
     const initCapacitor = async () => {
       try {
@@ -740,6 +993,24 @@ export default function App() {
         // Listen for network changes
         Network.addListener('networkStatusChange', status => {
           setNetworkStatus(status);
+        });
+
+        // Get storage info
+        try {
+          const storage = await (Filesystem as any).getFreeSpace({ directory: 'EXTERNAL' });
+          setStorageInfo({ free: Math.round(storage.free / (1024 * 1024 * 1024)), total: 128 });
+        } catch (e) {
+          console.warn("Storage info not available:", e);
+          setStorageInfo({ free: 64, total: 128 });
+        }
+
+        // Handle back button
+        CapacitorApp.addListener('backButton', ({ canGoBack }) => {
+          if (canGoBack) {
+            goBack();
+          } else {
+            CapacitorApp.exitApp();
+          }
         });
       } catch (e) {
         console.warn("Capacitor plugins not available or blocked:", e);
@@ -846,13 +1117,35 @@ export default function App() {
 
   const renderContent = () => {
     switch (activeTab) {
-      case 'dashboard': return <Dashboard onNavigate={navigateTo} battery={battery} deviceInfo={deviceInfo} />;
-      case 'cleaner': return <JunkCleaner />;
-      case 'booster': return <RAMBooster />;
-      case 'network': return <NetworkSpeed networkStatus={networkStatus} />;
-      case 'security': return <SecurityScan />;
+      case 'dashboard': return <Dashboard onNavigate={navigateTo} battery={battery} deviceInfo={deviceInfo} showToast={showToast} />;
+      case 'cleaner': return <JunkCleaner showToast={showToast} />;
+      case 'booster': return <RAMBooster showToast={showToast} />;
+      case 'network': return <NetworkSpeed networkStatus={networkStatus} showToast={showToast} />;
+      case 'security': return <SecurityScan showToast={showToast} />;
+      case 'settings': return <SettingsView showToast={showToast} />;
       case 'game': return (
         <div className="px-6 space-y-8 pb-32">
+          {isLaunchingGame && (
+            <motion.div 
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              className="fixed inset-0 z-[100] bg-bg-deep flex flex-col items-center justify-center p-10 text-center"
+            >
+              <div className="w-24 h-24 rounded-3xl bg-neon-green/10 flex items-center justify-center mb-6 border border-neon-green/20">
+                <Play size={48} className="text-neon-green animate-pulse" />
+              </div>
+              <h2 className="text-2xl font-display font-black text-white mb-2">Launching {isLaunchingGame}...</h2>
+              <p className="text-white/30 text-xs font-display uppercase tracking-widest">Optimizing GPU & Memory</p>
+              <div className="w-48 h-1 bg-white/5 rounded-full mt-8 overflow-hidden">
+                <motion.div 
+                  className="h-full bg-neon-green"
+                  initial={{ width: '0%' }}
+                  animate={{ width: '100%' }}
+                  transition={{ duration: 2 }}
+                />
+              </div>
+            </motion.div>
+          )}
           <div className="flex flex-col items-center justify-center py-10 text-center">
             <div className="relative w-32 h-32 mb-6">
               <motion.div 
@@ -887,7 +1180,7 @@ export default function App() {
           <div className="space-y-4">
             <h3 className="text-[10px] font-display font-bold text-white/30 uppercase tracking-[0.2em]">Installed Games</h3>
             <div className="grid grid-cols-1 gap-4">
-              {MOCK_APPS.filter(app => app.isGame).map((game) => (
+              {apps.filter(app => app.isGame).map((game) => (
                 <Card key={game.id} className="flex items-center gap-4 p-4">
                   <div className="w-14 h-14 flex items-center justify-center bg-white/5 rounded-2xl text-3xl">
                     {game.icon}
@@ -899,6 +1192,13 @@ export default function App() {
                   <motion.button 
                     whileHover={{ scale: 1.05 }}
                     whileTap={{ scale: 0.95 }}
+                    onClick={() => {
+                      setIsLaunchingGame(game.name);
+                      setTimeout(() => {
+                        setIsLaunchingGame(null);
+                        showToast(`${game.name} Launched Successfully`, 'success');
+                      }, 2500);
+                    }}
                     className="px-5 py-2.5 rounded-xl bg-neon-green text-bg-deep font-display font-bold text-[10px] uppercase tracking-widest shadow-[0_0_15px_rgba(0,255,136,0.3)]"
                   >
                     Launch
@@ -920,35 +1220,42 @@ export default function App() {
             />
           </div>
           <div className="space-y-4">
-            {MOCK_APPS.map((app, i) => (
-              <motion.div
-                key={app.id}
-                initial={{ opacity: 0, y: 10 }}
-                animate={{ opacity: 1, y: 0 }}
-                transition={{ delay: i * 0.05 }}
-              >
-                <Card className="flex items-center gap-4 p-4">
-                  <div className="w-14 h-14 flex items-center justify-center bg-white/5 rounded-2xl text-3xl">
-                    {app.icon}
-                  </div>
-                  <div className="flex-1">
-                    <p className="font-display font-bold text-white/90">{app.name}</p>
-                    <div className="flex items-center gap-2 text-[9px] text-white/30 uppercase tracking-widest font-bold">
-                      <span>{app.size}</span>
-                      <span className="text-neon-cyan">•</span>
-                      <span>{app.lastUsed}</span>
+            <AnimatePresence mode="popLayout">
+              {apps.map((app, i) => (
+                <motion.div
+                  key={app.id}
+                  initial={{ opacity: 0, y: 10 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  exit={{ opacity: 0, scale: 0.8, x: -100 }}
+                  transition={{ delay: i * 0.05 }}
+                >
+                  <Card className="flex items-center gap-4 p-4">
+                    <div className="w-14 h-14 flex items-center justify-center bg-white/5 rounded-2xl text-3xl">
+                      {app.icon}
                     </div>
-                  </div>
-                  <motion.button 
-                    whileHover={{ scale: 1.1, color: '#ff0055' }}
-                    whileTap={{ scale: 0.9 }}
-                    className="p-3 text-white/20 hover:bg-neon-red/10 rounded-xl transition-colors"
-                  >
-                    <Trash2 size={20} />
-                  </motion.button>
-                </Card>
-              </motion.div>
-            ))}
+                    <div className="flex-1">
+                      <p className="font-display font-bold text-white/90">{app.name}</p>
+                      <div className="flex items-center gap-2 text-[9px] text-white/30 uppercase tracking-widest font-bold">
+                        <span>{app.size}</span>
+                        <span className="text-neon-cyan">•</span>
+                        <span>{app.lastUsed}</span>
+                      </div>
+                    </div>
+                    <motion.button 
+                      whileHover={{ scale: 1.1, color: '#ff0055' }}
+                      whileTap={{ scale: 0.9 }}
+                      onClick={() => {
+                        setApps(prev => prev.filter(a => a.id !== app.id));
+                        showToast(`${app.name} Uninstalled`, 'info');
+                      }}
+                      className="p-3 text-white/20 hover:bg-neon-red/10 rounded-xl transition-colors"
+                    >
+                      <Trash2 size={20} />
+                    </motion.button>
+                  </Card>
+                </motion.div>
+              ))}
+            </AnimatePresence>
           </div>
         </div>
       );
@@ -988,7 +1295,7 @@ export default function App() {
                 animate={{ opacity: 1, scale: 1 }}
                 className="text-5xl font-display font-black text-white"
               >
-                52%
+                {storageInfo ? Math.round(((storageInfo.total - storageInfo.free) / storageInfo.total) * 100) : 52}%
               </motion.span>
               <span className="text-[10px] font-display text-white/30 uppercase tracking-[0.3em] font-bold">Used Space</span>
             </div>
@@ -1019,6 +1326,9 @@ export default function App() {
             <div className="w-full h-1.5 bg-white/5 rounded-full overflow-hidden">
               <div className="h-full bg-neon-green w-[85%] rounded-full" />
             </div>
+            <p className="text-[10px] text-white/20 uppercase font-display tracking-widest text-center">
+              {storageInfo ? `${storageInfo.total - storageInfo.free} GB / ${storageInfo.total} GB` : '64 GB / 128 GB'}
+            </p>
           </Card>
         </div>
       );
@@ -1068,9 +1378,9 @@ export default function App() {
 
           <div className="grid grid-cols-1 gap-4">
             {[
-              { label: 'Power Saving Mode', desc: 'Extend battery life by 2 hours', active: true },
-              { label: 'Ultra Power Saving', desc: 'Only essential apps', active: false },
-              { label: 'Adaptive Battery', desc: 'Limit background apps', active: true },
+              { id: 'save', label: 'Power Saving Mode', desc: 'Extend battery life by 2 hours', active: true },
+              { id: 'ultra', label: 'Ultra Power Saving', desc: 'Only essential apps', active: false },
+              { id: 'adaptive', label: 'Adaptive Battery', desc: 'Limit background apps', active: true },
             ].map((mode, i) => (
               <motion.div
                 key={mode.label}
@@ -1078,7 +1388,7 @@ export default function App() {
                 animate={{ opacity: 1, x: 0 }}
                 transition={{ delay: i * 0.1 }}
               >
-                <Card className="flex items-center justify-between p-5">
+                <Card className="flex items-center justify-between p-5" onClick={() => showToast(`${mode.label} ${!mode.active ? 'Enabled' : 'Disabled'}`, 'info')}>
                   <div>
                     <p className="text-sm font-display font-bold text-white/90">{mode.label}</p>
                     <p className="text-[9px] text-white/30 uppercase tracking-widest font-bold">{mode.desc}</p>
@@ -1101,77 +1411,8 @@ export default function App() {
           </div>
         </div>
       );
-      case 'cooler': return (
-        <div className="px-6 space-y-8 pb-32">
-          <div className="flex flex-col items-center justify-center py-12 text-center">
-            <div className="relative w-48 h-48 mb-8 flex items-center justify-center">
-              <motion.div 
-                className="absolute inset-0 bg-neon-cyan/5 rounded-full blur-3xl"
-                animate={{ scale: [1, 1.3, 1], opacity: [0.2, 0.4, 0.2] }}
-                transition={{ duration: 5, repeat: Infinity }}
-              />
-              <div className="relative z-10 flex flex-col items-center">
-                <Thermometer size={80} className="text-neon-cyan mb-4 drop-shadow-[0_0_20px_rgba(0,245,255,0.4)]" />
-                <motion.span 
-                  initial={{ opacity: 0 }}
-                  animate={{ opacity: 1 }}
-                  className="text-5xl font-display font-black text-white"
-                >
-                  34°C
-                </motion.span>
-              </div>
-              <motion.div 
-                className="absolute inset-0 rounded-full border border-neon-cyan/20"
-                animate={{ rotate: 360 }}
-                transition={{ duration: 10, repeat: Infinity, ease: "linear" }}
-              />
-              <motion.div 
-                className="absolute inset-4 rounded-full border border-dashed border-neon-cyan/10"
-                animate={{ rotate: -360 }}
-                transition={{ duration: 15, repeat: Infinity, ease: "linear" }}
-              />
-            </div>
-            <h2 className="text-2xl font-display font-black text-white mb-1">Temperature: Normal</h2>
-            <p className="text-white/30 uppercase tracking-[0.3em] text-[10px] font-bold">CPU is running cool</p>
-          </div>
-
-          <motion.button 
-            whileHover={{ scale: 1.02 }}
-            whileTap={{ scale: 0.98 }}
-            className="w-full py-5 rounded-2xl bg-neon-cyan text-bg-deep font-display font-bold text-lg tracking-[0.2em] uppercase neon-glow-cyan"
-          >
-            Cool Down Now
-          </motion.button>
-
-          <div className="space-y-4">
-            <h3 className="text-[10px] font-display font-bold text-white/30 uppercase tracking-[0.2em]">Heat Sources</h3>
-            <div className="space-y-3">
-              {[
-                { name: 'System UI', impact: 'Low', icon: Cpu },
-                { name: 'Background Apps', impact: 'Minimal', icon: Layers },
-                { name: 'Display', impact: 'Moderate', icon: Info },
-              ].map((item, i) => (
-                <motion.div 
-                  key={item.name}
-                  initial={{ opacity: 0, y: 10 }}
-                  animate={{ opacity: 1, y: 0 }}
-                  transition={{ delay: i * 0.1 }}
-                  className="flex items-center gap-4 p-4 glass rounded-xl"
-                >
-                  <div className="p-2 rounded-lg bg-white/5 text-neon-cyan">
-                    <item.icon size={18} />
-                  </div>
-                  <span className="flex-1 text-sm font-display text-white/60 font-medium">{item.name}</span>
-                  <span className="text-[9px] font-display font-bold uppercase tracking-widest text-neon-cyan">
-                    {item.impact}
-                  </span>
-                </motion.div>
-              ))}
-            </div>
-          </div>
-        </div>
-      );
-      default: return <Dashboard onNavigate={navigateTo} battery={battery} deviceInfo={deviceInfo} />;
+      case 'cooler': return <CPUCooler showToast={showToast} />;
+      default: return <Dashboard onNavigate={navigateTo} battery={battery} deviceInfo={deviceInfo} showToast={showToast} />;
     }
   };
 
@@ -1186,6 +1427,7 @@ export default function App() {
       case 'cooler': return 'CPU Cooler';
       case 'network': return 'Network Speed';
       case 'security': return 'Security Center';
+      case 'settings': return 'Settings';
       case 'game': return 'Game Booster';
       default: return 'Ultra Optimize X';
     }
@@ -1209,6 +1451,16 @@ export default function App() {
       </motion.div>
 
       <BottomNav activeTab={activeTab} onNavigate={navigateTo} />
+
+      <AnimatePresence>
+        {toast && (
+          <Toast 
+            message={toast.message} 
+            type={toast.type} 
+            onClose={() => setToast(null)} 
+          />
+        )}
+      </AnimatePresence>
     </div>
   );
 }
