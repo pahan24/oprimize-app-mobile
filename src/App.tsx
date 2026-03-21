@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback, useMemo } from 'react';
+import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import { 
   Zap, 
   Trash2, 
@@ -26,21 +26,28 @@ import {
   AlertTriangle,
   Play,
   Signal,
-  Layers
+  Layers,
+  Crosshair,
+  Sliders,
+  Monitor,
+  Gamepad2,
+  MousePointer2,
+  Target,
+  ZapOff,
+  Bell,
+  Palette,
+  HelpCircle,
+  Share2,
+  Star
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { PieChart, Pie, Cell, ResponsiveContainer, AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip } from 'recharts';
+import Confetti from 'react-confetti';
+import { useWindowSize } from 'react-use';
 import { cn } from './utils';
 
-import { Device } from '@capacitor/device';
-import { StatusBar, Style } from '@capacitor/status-bar';
-import { SplashScreen } from '@capacitor/splash-screen';
-import { Network } from '@capacitor/network';
-import { Filesystem } from '@capacitor/filesystem';
-import { App as CapacitorApp } from '@capacitor/app';
-
 // --- Types ---
-type Tab = 'dashboard' | 'cleaner' | 'booster' | 'battery' | 'cooler' | 'storage' | 'apps' | 'network' | 'security' | 'game' | 'settings';
+type Tab = 'dashboard' | 'gfx' | 'sensitivity' | 'crosshair' | 'booster' | 'cleaner' | 'battery' | 'cooler' | 'apps' | 'network' | 'settings';
 
 interface AppInfo {
   id: string;
@@ -51,43 +58,57 @@ interface AppInfo {
   isGame?: boolean;
 }
 
-interface BatteryStatus {
-  level: number;
-  charging: boolean;
-  chargingTime: number;
-  dischargingTime: number;
+interface GFXSettings {
+  resolution: string;
+  fps: string;
+  graphics: string;
+  style: string;
+  shadows: boolean;
+  msaa: boolean;
 }
 
-interface NetworkStatus {
-  connected: boolean;
-  connectionType: string;
+interface SensitivitySettings {
+  general: number;
+  redDot: number;
+  scope2x: number;
+  scope4x: number;
+  sniper: number;
+  freeLook: number;
+}
+
+interface CrosshairSettings {
+  type: string;
+  color: string;
+  size: number;
+  opacity: number;
+  thickness: number;
 }
 
 // --- Mock Data ---
 const MOCK_APPS: AppInfo[] = [
-  { id: '1', name: 'Social Connect', size: '1.2 GB', icon: '📱', lastUsed: '2 mins ago' },
-  { id: '2', name: 'Fast Browser', size: '450 MB', icon: '🌐', lastUsed: '1 hour ago' },
-  { id: '3', name: 'Photo Editor Pro', size: '890 MB', icon: '🎨', lastUsed: 'Yesterday' },
-  { id: '4', name: 'Music Stream', size: '320 MB', icon: '🎵', lastUsed: '3 hours ago' },
-  { id: '5', name: 'Video Player', size: '1.5 GB', icon: '🎬', lastUsed: '5 mins ago' },
-  { id: '6', name: 'Game Master', size: '2.8 GB', icon: '🎮', lastUsed: '2 days ago', isGame: true },
-  { id: '7', name: 'Shadow Fight', size: '1.1 GB', icon: '⚔️', lastUsed: '5 days ago', isGame: true },
-  { id: '8', name: 'Racing Rivals', size: '1.4 GB', icon: '🏎️', lastUsed: '1 week ago', isGame: true },
+  { id: '1', name: 'Free Fire', size: '1.8 GB', icon: '🔥', lastUsed: '2 mins ago', isGame: true },
+  { id: '2', name: 'PUBG Mobile', size: '2.4 GB', icon: '🔫', lastUsed: '1 hour ago', isGame: true },
+  { id: '3', name: 'Call of Duty', size: '3.1 GB', icon: '🎖️', lastUsed: 'Yesterday', isGame: true },
+  { id: '4', name: 'Mobile Legends', size: '1.2 GB', icon: '⚔️', lastUsed: '3 hours ago', isGame: true },
+  { id: '5', name: 'Social Connect', size: '1.2 GB', icon: '📱', lastUsed: '5 mins ago' },
+  { id: '6', name: 'Fast Browser', size: '450 MB', icon: '🌐', lastUsed: '2 days ago' },
+  { id: '7', name: 'Photo Editor', size: '890 MB', icon: '🎨', lastUsed: '5 days ago' },
+  { id: '8', name: 'Music Stream', size: '320 MB', icon: '🎵', lastUsed: '1 week ago' },
 ];
 
 const STORAGE_DATA = [
-  { name: 'Apps', value: 45, color: '#00f5ff' },
-  { name: 'Media', value: 30, color: '#bf00ff' },
+  { name: 'Games', value: 55, color: '#ff0055' },
+  { name: 'Apps', value: 25, color: '#00f5ff' },
   { name: 'System', value: 15, color: '#00ff88' },
-  { name: 'Free', value: 10, color: '#1d1d2c' },
+  { name: 'Free', value: 5, color: '#1d1d2c' },
 ];
 
 // --- Components ---
 
-const Card = ({ children, className, onClick }: { children: React.ReactNode; className?: string; onClick?: () => void; key?: string | number }) => (
+const Card = ({ children, className, onClick, noHover = false }: { children: React.ReactNode; className?: string; onClick?: () => void; noHover?: boolean; key?: string | number }) => (
   <motion.div 
-    whileHover={{ scale: 1.02 }}
-    whileTap={{ scale: 0.98 }}
+    whileHover={noHover ? {} : { scale: 1.02 }}
+    whileTap={noHover ? {} : { scale: 0.98 }}
     onClick={onClick}
     className={cn("glass rounded-2xl p-4 transition-all duration-300", className)}
   >
@@ -95,1548 +116,661 @@ const Card = ({ children, className, onClick }: { children: React.ReactNode; cla
   </motion.div>
 );
 
-const Header = ({ title, onBack }: { title: string; onBack?: () => void }) => (
-  <div className="flex items-center gap-4 p-6 sticky top-0 bg-bg-deep/40 backdrop-blur-xl z-50 border-b border-white/5">
-    {onBack && (
-      <motion.button 
-        whileHover={{ scale: 1.1 }}
-        whileTap={{ scale: 0.9 }}
-        onClick={onBack} 
-        className="p-2 rounded-full bg-white/5 hover:bg-white/10 transition-colors"
-      >
-        <ArrowLeft size={20} />
-      </motion.button>
-    )}
-    <h1 className="text-lg font-display font-bold tracking-tight text-white uppercase flex-1">
-      {title.split(' ').map((word, i) => (
-        <span key={i} className={cn(i === 1 && "text-neon-cyan")}>{word} </span>
-      ))}
-    </h1>
-    {!onBack && (
-      <motion.div 
-        whileHover={{ rotate: 90 }}
-        onClick={() => onBack ? null : (window as any).navigateToSettings?.()}
-        className="p-2 rounded-full bg-white/5 cursor-pointer"
-      >
-        <Settings size={20} />
-      </motion.div>
-    )}
+const Header = ({ title, onBack, rightElement }: { title: string; onBack?: () => void; rightElement?: React.ReactNode }) => (
+  <div className="flex items-center justify-between p-6 sticky top-0 bg-bg-deep/60 backdrop-blur-2xl z-50 border-b border-white/5">
+    <div className="flex items-center gap-4">
+      {onBack && (
+        <button onClick={onBack} className="p-2 rounded-xl bg-white/5 hover:bg-white/10 transition-colors">
+          <ArrowLeft size={20} className="text-neon-cyan" />
+        </button>
+      )}
+      <h1 className="text-xl font-display font-bold tracking-wider text-white uppercase">{title}</h1>
+    </div>
+    {rightElement}
   </div>
 );
 
-const BottomNav = ({ activeTab, onNavigate }: { activeTab: Tab; onNavigate: (tab: Tab) => void }) => {
-  const navItems = [
-    { id: 'dashboard', icon: LayoutGrid, label: 'Home' },
-    { id: 'cleaner', icon: Trash2, label: 'Clean' },
-    { id: 'booster', icon: Zap, label: 'Boost' },
-    { id: 'security', icon: ShieldCheck, label: 'Safe' },
-  ];
+const StatItem = ({ icon: Icon, label, value, colorClass }: { icon: any; label: string; value: string; colorClass: string }) => (
+  <div className="flex flex-col items-center gap-2 p-4 rounded-2xl bg-white/5 border border-white/5">
+    <Icon size={20} className={colorClass} />
+    <span className="text-[10px] uppercase tracking-widest text-white/40 font-medium">{label}</span>
+    <span className="text-lg font-display font-bold text-white">{value}</span>
+  </div>
+);
 
-  return (
-    <div className="fixed bottom-6 left-6 right-6 glass rounded-2xl px-6 py-3 flex justify-between items-center z-50 shadow-2xl">
-      {navItems.map((item) => (
+const ProgressBar = ({ progress, colorClass, label }: { progress: number; colorClass: string; label?: string }) => (
+  <div className="w-full space-y-2">
+    {label && (
+      <div className="flex justify-between text-[10px] uppercase tracking-widest font-bold">
+        <span className="text-white/60">{label}</span>
+        <span className={colorClass}>{progress}%</span>
+      </div>
+    )}
+    <div className="h-2 w-full bg-white/5 rounded-full overflow-hidden">
+      <motion.div 
+        initial={{ width: 0 }}
+        animate={{ width: `${progress}%` }}
+        transition={{ duration: 1, ease: "easeOut" }}
+        className={cn("h-full rounded-full", colorClass.replace('text-', 'bg-'))}
+      />
+    </div>
+  </div>
+);
+
+const Toggle = ({ active, onToggle, label }: { active: boolean; onToggle: () => void; label: string }) => (
+  <div className="flex items-center justify-between p-4 rounded-2xl bg-white/5 border border-white/5">
+    <span className="text-sm font-medium text-white/80">{label}</span>
+    <button 
+      onClick={onToggle}
+      className={cn(
+        "w-12 h-6 rounded-full transition-all duration-300 relative p-1",
+        active ? "bg-neon-cyan neon-glow-cyan" : "bg-white/10"
+      )}
+    >
+      <motion.div 
+        animate={{ x: active ? 24 : 0 }}
+        className="w-4 h-4 bg-white rounded-full shadow-lg"
+      />
+    </button>
+  </div>
+);
+
+const Slider = ({ value, onChange, min = 0, max = 100, label, icon: Icon }: { value: number; onChange: (v: number) => void; min?: number; max?: number; label: string; icon?: any }) => (
+  <div className="space-y-3 p-4 rounded-2xl bg-white/5 border border-white/5">
+    <div className="flex justify-between items-center">
+      <div className="flex items-center gap-2">
+        {Icon && <Icon size={16} className="text-neon-cyan" />}
+        <span className="text-xs uppercase tracking-widest text-white/60 font-bold">{label}</span>
+      </div>
+      <span className="text-sm font-display font-bold text-neon-cyan">{value}</span>
+    </div>
+    <input 
+      type="range" 
+      min={min} 
+      max={max} 
+      value={value} 
+      onChange={(e) => onChange(parseInt(e.target.value))}
+      className="w-full h-1.5 bg-white/10 rounded-full appearance-none cursor-pointer accent-neon-cyan"
+    />
+  </div>
+);
+
+const OptionGrid = ({ options, selected, onSelect, label }: { options: string[]; selected: string; onSelect: (s: string) => void; label: string }) => (
+  <div className="space-y-3">
+    <span className="text-[10px] uppercase tracking-widest text-white/40 font-bold ml-1">{label}</span>
+    <div className="grid grid-cols-2 gap-2">
+      {options.map((opt) => (
         <button
-          key={item.id}
-          onClick={() => onNavigate(item.id as Tab)}
+          key={opt}
+          onClick={() => onSelect(opt)}
           className={cn(
-            "flex flex-col items-center gap-1 transition-all duration-300 relative",
-            activeTab === item.id ? "text-neon-cyan scale-110" : "text-white/40 hover:text-white/60"
+            "py-3 px-4 rounded-xl text-xs font-bold transition-all duration-300 border",
+            selected === opt 
+              ? "bg-neon-cyan/20 border-neon-cyan text-neon-cyan neon-glow-cyan" 
+              : "bg-white/5 border-white/5 text-white/40 hover:bg-white/10"
           )}
         >
-          {activeTab === item.id && (
-            <motion.div 
-              layoutId="nav-active"
-              className="absolute -top-1 w-1 h-1 bg-neon-cyan rounded-full shadow-[0_0_8px_rgba(0,245,255,1)]"
-            />
-          )}
-          <item.icon size={22} className={cn(activeTab === item.id && "drop-shadow-[0_0_8px_rgba(0,245,255,0.8)]")} />
-          <span className="text-[9px] font-display uppercase tracking-widest font-bold">{item.label}</span>
+          {opt}
         </button>
       ))}
     </div>
-  );
-};
-
-// --- Views ---
-
-const Dashboard = ({ onNavigate, battery, deviceInfo, showToast }: { onNavigate: (tab: Tab) => void; battery: BatteryStatus | null; deviceInfo: any; showToast: (m: string, t?: any) => void }) => {
-  const [healthScore, setHealthScore] = useState(85);
-  const [isBoosting, setIsBoosting] = useState(false);
-  const [memory, setMemory] = useState<{ used: number; total: number } | null>(null);
-
-  useEffect(() => {
-    const updateMemory = () => {
-      try {
-        if (window.performance && (window.performance as any).memory) {
-          const mem = (window.performance as any).memory;
-          setMemory({
-            used: Math.round(mem.usedJSHeapSize / (1024 * 1024)),
-            total: Math.round(mem.jsHeapSizeLimit / (1024 * 1024))
-          });
-        } else {
-          setMemory({ used: 420, total: 2048 });
-        }
-      } catch (e) {
-        setMemory({ used: 420, total: 2048 });
-      }
-    };
-    updateMemory();
-    const interval = setInterval(updateMemory, 5000);
-    return () => clearInterval(interval);
-  }, []);
-
-  const handleBoost = () => {
-    setIsBoosting(true);
-    setTimeout(() => {
-      setHealthScore(100);
-      setIsBoosting(false);
-      showToast('System Fully Optimized', 'success');
-    }, 2500);
-  };
-
-  return (
-    <div className="pb-32 px-6 space-y-8">
-      {/* Health Orb */}
-      <div className="relative flex justify-center py-10">
-        <div className="relative w-56 h-56">
-          <motion.div 
-            className="absolute inset-0 rounded-full border-[1px] border-neon-cyan/10"
-            animate={{ scale: [1, 1.1, 1] }}
-            transition={{ duration: 4, repeat: Infinity }}
-          />
-          <div className="absolute inset-4 rounded-full glass flex flex-col items-center justify-center shadow-[0_0_30px_rgba(0,245,255,0.1)]">
-            <motion.div 
-              className="absolute inset-0 rounded-full border-2 border-neon-cyan border-t-transparent"
-              animate={{ rotate: 360 }}
-              transition={{ duration: isBoosting ? 0.5 : 3, repeat: Infinity, ease: "linear" }}
-            />
-            <AnimatePresence mode="wait">
-              <motion.span 
-                key={healthScore}
-                initial={{ opacity: 0, y: 10 }}
-                animate={{ opacity: 1, y: 0 }}
-                className="text-6xl font-display font-black text-white"
-              >
-                {healthScore}
-              </motion.span>
-            </AnimatePresence>
-            <span className="text-[10px] font-display text-neon-cyan tracking-[0.3em] uppercase mt-2 font-bold">System Health</span>
-          </div>
-        </div>
-      </div>
-
-      <motion.button 
-        whileHover={{ scale: 1.02 }}
-        whileTap={{ scale: 0.98 }}
-        onClick={handleBoost}
-        disabled={isBoosting}
-        className={cn(
-          "w-full py-5 rounded-2xl font-display font-bold text-lg tracking-[0.2em] uppercase transition-all relative overflow-hidden",
-          isBoosting ? "bg-white/5 text-white/20" : "bg-neon-cyan text-bg-deep neon-glow-cyan"
-        )}
-      >
-        {isBoosting && (
-          <motion.div 
-            className="absolute inset-0 bg-white/10"
-            initial={{ x: '-100%' }}
-            animate={{ x: '100%' }}
-            transition={{ duration: 1, repeat: Infinity, ease: "linear" }}
-          />
-        )}
-        <span className="relative z-10">{isBoosting ? "Optimizing..." : "One Tap Boost"}</span>
-      </motion.button>
-
-      {/* Stats Grid */}
-      <div className="grid grid-cols-3 gap-4">
-        {[
-          { label: 'RAM', value: memory ? `${Math.round((memory.used / memory.total) * 100)}%` : '--%', icon: Activity, color: 'text-neon-purple', bg: 'bg-neon-purple/10', tab: 'booster' },
-          { label: 'Disk', value: '52%', icon: HardDrive, color: 'text-neon-cyan', bg: 'bg-neon-cyan/10', tab: 'storage' },
-          { label: 'Power', value: battery ? `${battery.level}%` : '--%', icon: Battery, color: 'text-neon-green', bg: 'bg-neon-green/10', tab: 'battery' }
-        ].map((stat) => (
-          <Card key={stat.label} className="flex flex-col items-center gap-2 p-4" onClick={() => onNavigate(stat.tab as Tab)}>
-            <div className={cn("p-2 rounded-xl", stat.bg, stat.color)}>
-              <stat.icon size={18} />
-            </div>
-            <div className="text-center">
-              <p className="text-[9px] font-display text-white/30 uppercase tracking-widest">{stat.label}</p>
-              <p className="text-sm font-display font-bold text-white/90">{stat.value}</p>
-            </div>
-          </Card>
-        ))}
-      </div>
-
-      {/* Device Info */}
-      <div className="space-y-4">
-        <h2 className="text-[10px] font-display font-bold text-white/30 uppercase tracking-[0.2em]">Device Status</h2>
-        <Card className="flex items-center gap-4 p-4">
-          <div className="p-3 rounded-2xl bg-neon-cyan/10 text-neon-cyan">
-            <Smartphone size={22} />
-          </div>
-          <div className="flex-1">
-            <p className="font-display font-bold text-xs text-white/90">{deviceInfo?.model || 'System Optimizer'}</p>
-            <p className="text-[9px] text-white/30 uppercase tracking-wider">{deviceInfo?.operatingSystem || 'Android'} {deviceInfo?.osVersion || 'v1.0'}</p>
-          </div>
-          <div className="text-right">
-            <p className="text-[10px] font-display font-bold text-neon-green uppercase tracking-widest">Optimized</p>
-          </div>
-        </Card>
-      </div>
-
-      {/* Quick Actions Grid */}
-      <div className="space-y-4">
-        <h2 className="text-[10px] font-display font-bold text-white/30 uppercase tracking-[0.2em]">System Tools</h2>
-        <div className="grid grid-cols-2 gap-4">
-          {[
-            { id: 'cleaner', label: 'Cleaner', sub: '2.4 GB Junk', icon: Trash2, color: 'text-neon-cyan', bg: 'bg-neon-cyan/10' },
-            { id: 'cooler', label: 'CPU Cooler', sub: '38°C Normal', icon: Thermometer, color: 'text-neon-orange', bg: 'bg-neon-orange/10' },
-            { id: 'network', label: 'Network', sub: 'Speed Test', icon: Wifi, color: 'text-neon-purple', bg: 'bg-neon-purple/10' },
-            { id: 'apps', label: 'Apps', sub: '8 Manager', icon: Smartphone, color: 'text-neon-green', bg: 'bg-neon-green/10' },
-            { id: 'game', label: 'Game Boost', sub: '3 Games', icon: Play, color: 'text-neon-purple', bg: 'bg-neon-purple/10' }
-          ].map((tool) => (
-            <Card key={tool.id} className="flex items-center gap-4 p-4" onClick={() => onNavigate(tool.id as Tab)}>
-              <div className={cn("p-3 rounded-2xl", tool.bg, tool.color)}>
-                <tool.icon size={22} />
-              </div>
-              <div>
-                <p className="font-display font-bold text-xs text-white/90">{tool.label}</p>
-                <p className="text-[9px] text-white/30 uppercase tracking-wider">{tool.sub}</p>
-              </div>
-            </Card>
-          ))}
-        </div>
-      </div>
-    </div>
-  );
-};
-
-const JunkCleaner = ({ showToast }: { showToast: (m: string, t?: any) => void }) => {
-  const [isScanning, setIsScanning] = useState(false);
-  const [junkFound, setJunkFound] = useState<number | null>(null);
-  const [isCleaning, setIsCleaning] = useState(false);
-  const [scanningFile, setScanningFile] = useState('');
-  const [categories, setCategories] = useState<{ name: string; size: string; icon: any }[]>([
-    { name: 'System Cache', size: '0 MB', icon: Trash2 },
-    { name: 'App Logs', size: '0 MB', icon: History },
-    { name: 'Temp Files', size: '0 MB', icon: RefreshCw },
-    { name: 'Ad Junk', size: '0 MB', icon: AlertTriangle },
-  ]);
-
-  const handleScan = () => {
-    setIsScanning(true);
-    setJunkFound(null);
-    const files = ['/system/cache/tmp_01.log', '/data/user/0/com.android.chrome/cache', '/storage/emulated/0/Download/temp_installer.apk', '/system/logs/crash_dump.txt', 'Cleaning memory leaks...', 'Scanning deep storage...'];
-    let i = 0;
-    const interval = setInterval(() => {
-      setScanningFile(files[i % files.length]);
-      i++;
-    }, 300);
-
-    setTimeout(() => {
-      clearInterval(interval);
-      setIsScanning(false);
-      setJunkFound(2.4);
-      setCategories([
-        { name: 'System Cache', size: '840 MB', icon: Trash2 },
-        { name: 'App Logs', size: '320 MB', icon: History },
-        { name: 'Temp Files', size: '1.1 GB', icon: RefreshCw },
-        { name: 'Ad Junk', size: '140 MB', icon: AlertTriangle },
-      ]);
-    }, 4000);
-  };
-
-  const handleClean = () => {
-    setIsCleaning(true);
-    setTimeout(() => {
-      setIsCleaning(false);
-      setJunkFound(0);
-      setCategories(prev => prev.map(c => ({ ...c, size: '0 MB' })));
-      showToast('2.4 GB Junk Cleaned', 'success');
-    }, 2500);
-  };
-
-  return (
-    <div className="px-6 space-y-8 pb-32">
-      <div className="flex flex-col items-center justify-center py-12 text-center">
-        <div className="relative w-48 h-48 mb-8">
-          <AnimatePresence mode="wait">
-            {isScanning || isCleaning ? (
-              <motion.div 
-                key="active"
-                initial={{ opacity: 0, scale: 0.8 }}
-                animate={{ opacity: 1, scale: 1 }}
-                exit={{ opacity: 0, scale: 1.2 }}
-                className="absolute inset-0 flex items-center justify-center"
-              >
-                <div className="w-full h-full rounded-full border-2 border-neon-cyan/20 relative overflow-hidden glass">
-                  <motion.div 
-                    className="absolute top-0 left-0 w-full h-1.5 bg-neon-cyan shadow-[0_0_20px_rgba(0,245,255,1)]"
-                    animate={{ top: ['0%', '100%', '0%'] }}
-                    transition={{ duration: 1.5, repeat: Infinity, ease: "easeInOut" }}
-                  />
-                  <div className="absolute inset-0 flex items-center justify-center">
-                    <Trash2 size={48} className="text-neon-cyan/40 animate-pulse" />
-                  </div>
-                </div>
-              </motion.div>
-            ) : (
-              <motion.div 
-                key="idle"
-                initial={{ opacity: 0, scale: 0.8 }}
-                animate={{ opacity: 1, scale: 1 }}
-                className="absolute inset-0 flex items-center justify-center"
-              >
-                <div className="p-10 rounded-full bg-neon-cyan/10 text-neon-cyan shadow-[0_0_40px_rgba(0,245,255,0.1)] border border-neon-cyan/20">
-                  <Trash2 size={64} />
-                </div>
-              </motion.div>
-            )}
-          </AnimatePresence>
-        </div>
-
-        <h2 className="text-3xl font-display font-black mb-2 text-white">
-          {isScanning ? "Scanning..." : isCleaning ? "Cleaning..." : junkFound ? `${junkFound} GB Found` : "System Clean"}
-        </h2>
-        {isScanning && (
-          <p className="text-neon-cyan text-[10px] font-mono truncate w-full max-w-[200px] mt-2 opacity-60">
-            {scanningFile}
-          </p>
-        )}
-        <p className="text-white/30 text-xs font-display uppercase tracking-widest max-w-[240px] mt-2">
-          {junkFound ? "Optimization recommended" : "No junk files detected"}
-        </p>
-      </div>
-
-      <motion.button 
-        whileHover={{ scale: 1.02 }}
-        whileTap={{ scale: 0.98 }}
-        onClick={junkFound ? handleClean : handleScan}
-        disabled={isScanning || isCleaning}
-        className={cn(
-          "w-full py-5 rounded-2xl font-display font-bold text-lg tracking-[0.2em] uppercase transition-all",
-          isScanning || isCleaning ? "bg-white/5 text-white/20" : "bg-neon-cyan text-bg-deep neon-glow-cyan"
-        )}
-      >
-        {isScanning ? "Scanning..." : isCleaning ? "Cleaning..." : junkFound ? "Clean Now" : "Start Scan"}
-      </motion.button>
-
-      <div className="space-y-3">
-        {categories.map((cat) => (
-          <motion.div 
-            key={cat.name} 
-            initial={{ opacity: 0, x: -20 }}
-            animate={{ opacity: 1, x: 0 }}
-            className="flex items-center gap-4 p-4 glass rounded-xl"
-          >
-            <div className="p-2 rounded-lg bg-white/5 text-neon-cyan">
-              <cat.icon size={18} />
-            </div>
-            <span className="flex-1 text-sm font-display text-white/60 font-medium">{cat.name}</span>
-            <span className="text-sm font-display font-bold text-neon-cyan">{cat.size}</span>
-          </motion.div>
-        ))}
-      </div>
-    </div>
-  );
-};
-
-const RAMBooster = ({ showToast }: { showToast: (m: string, t?: any) => void }) => {
-  const [isBoosting, setIsBoosting] = useState(false);
-  const [freed, setFreed] = useState<number | null>(null);
-  const [memory, setMemory] = useState<{ used: number; total: number }>({ used: 420, total: 2048 });
-  const [processes, setProcesses] = useState(MOCK_APPS.slice(0, 5));
-
-  useEffect(() => {
-    const updateMemory = () => {
-      try {
-        if (window.performance && (window.performance as any).memory) {
-          const mem = (window.performance as any).memory;
-          setMemory({
-            used: Math.round(mem.usedJSHeapSize / (1024 * 1024)),
-            total: Math.round(mem.jsHeapSizeLimit / (1024 * 1024))
-          });
-        }
-      } catch (e) {
-        // Silently fail and keep previous state
-      }
-    };
-    updateMemory();
-    const interval = setInterval(updateMemory, 2000);
-    return () => clearInterval(interval);
-  }, []);
-
-  const handleBoost = () => {
-    setIsBoosting(true);
-    setFreed(null);
-    setTimeout(() => {
-      const freedAmount = Math.floor(Math.random() * 200) + 300;
-      setIsBoosting(false);
-      setFreed(freedAmount);
-      setProcesses([]);
-      showToast(`${freedAmount} MB RAM Freed`, 'success');
-      setTimeout(() => setProcesses(MOCK_APPS.slice(0, 5)), 5000);
-    }, 2500);
-  };
-
-  const usagePercent = Math.round((memory.used / memory.total) * 100);
-
-  return (
-    <div className="px-6 space-y-6 pb-32">
-      <Card className="p-8 text-center space-y-6 relative overflow-hidden">
-        <motion.div 
-          className="absolute -right-10 -top-10 w-32 h-32 bg-neon-purple/5 rounded-full blur-3xl"
-          animate={{ scale: [1, 1.2, 1] }}
-          transition={{ duration: 4, repeat: Infinity }}
-        />
-        <div className="flex justify-center">
-          <div className="p-5 rounded-full bg-neon-purple/10 text-neon-purple shadow-[0_0_20px_rgba(191,0,255,0.2)]">
-            <Zap size={48} className={cn(isBoosting && "animate-bounce")} />
-          </div>
-        </div>
-        <div>
-          <p className="text-5xl font-display font-black text-white">{usagePercent}%</p>
-          <p className="text-[10px] font-display text-white/30 uppercase tracking-[0.3em] mt-1 font-bold">RAM Usage</p>
-        </div>
-        <div className="w-full h-2.5 bg-white/5 rounded-full overflow-hidden p-[2px]">
-          <motion.div 
-            className="h-full bg-gradient-to-r from-neon-purple to-neon-cyan rounded-full"
-            initial={{ width: '0%' }}
-            animate={{ width: `${usagePercent}%` }}
-            transition={{ duration: 1.5, ease: "easeOut" }}
-          />
-        </div>
-        <p className="text-[10px] text-white/20 uppercase font-display tracking-widest">
-          {memory.used} MB / {memory.total} MB
-        </p>
-      </Card>
-
-      <motion.button 
-        whileHover={{ scale: 1.02 }}
-        whileTap={{ scale: 0.98 }}
-        onClick={handleBoost}
-        disabled={isBoosting}
-        className="w-full py-5 rounded-2xl bg-neon-purple text-white font-display font-bold text-lg tracking-[0.2em] uppercase neon-glow-purple"
-      >
-        {isBoosting ? "Boosting..." : freed ? `Freed ${freed} MB` : "Boost Now"}
-      </motion.button>
-
-      <div className="space-y-4">
-        <h3 className="text-[10px] font-display font-bold text-white/30 uppercase tracking-[0.2em]">Active Processes</h3>
-        <div className="space-y-3 min-h-[100px]">
-          <AnimatePresence mode="popLayout">
-            {processes.map((app, i) => (
-              <motion.div 
-                key={app.id} 
-                initial={{ opacity: 0, y: 10 }}
-                animate={{ opacity: 1, y: 0 }}
-                exit={{ opacity: 0, scale: 0.8, x: 50 }}
-                transition={{ delay: i * 0.1 }}
-                className="flex items-center gap-4 p-4 glass rounded-xl"
-              >
-                <div className="w-10 h-10 flex items-center justify-center bg-white/5 rounded-lg text-xl">
-                  {app.icon}
-                </div>
-                <div className="flex-1">
-                  <p className="text-sm font-display font-bold text-white/90">{app.name}</p>
-                  <p className="text-[9px] text-white/30 uppercase tracking-wider">{app.size}</p>
-                </div>
-                <div className="flex flex-col items-end gap-1">
-                  <span className="text-[10px] text-neon-purple font-display font-bold">{(Math.random() * 5 + 2).toFixed(1)}%</span>
-                  <div className="w-1.5 h-1.5 rounded-full bg-neon-green shadow-[0_0_5px_rgba(0,255,136,1)]" />
-                </div>
-              </motion.div>
-            ))}
-          </AnimatePresence>
-          {processes.length === 0 && !isBoosting && (
-            <div className="text-center py-10">
-              <CheckCircle2 className="mx-auto text-neon-green mb-2" size={32} />
-              <p className="text-xs text-white/30 uppercase tracking-widest">Memory Optimized</p>
-            </div>
-          )}
-        </div>
-      </div>
-    </div>
-  );
-};
-
-const NetworkSpeed = ({ networkStatus, showToast }: { networkStatus: any; showToast: (m: string, t?: any) => void }) => {
-  const [isTesting, setIsTesting] = useState(false);
-  const [speed, setSpeed] = useState<number | null>(null);
-  const [ping, setPing] = useState<number | null>(null);
-  const [signal, setSignal] = useState(85);
-
-  useEffect(() => {
-    const interval = setInterval(() => {
-      setSignal(prev => Math.max(70, Math.min(100, prev + (Math.random() * 4 - 2))));
-    }, 3000);
-    return () => clearInterval(interval);
-  }, []);
-
-  const startTest = () => {
-    setIsTesting(true);
-    setSpeed(null);
-    setPing(null);
-    setTimeout(() => {
-      const finalPing = Math.floor(Math.random() * 20) + 10;
-      const finalSpeed = Math.floor(Math.random() * 50) + 40;
-      setPing(finalPing);
-      setSpeed(finalSpeed);
-      setIsTesting(false);
-      showToast(`Speed Test Complete: ${finalSpeed} Mbps`, 'success');
-    }, 3000);
-  };
-
-  return (
-    <div className="px-6 space-y-8 pb-32">
-      <div className="flex flex-col items-center justify-center py-12 text-center">
-        <div className="relative w-56 h-56 mb-8 flex items-center justify-center">
-          <motion.div 
-            className="absolute inset-0 rounded-full border-2 border-neon-purple/20"
-            animate={isTesting ? { scale: [1, 1.1, 1], opacity: [0.2, 0.5, 0.2] } : {}}
-            transition={{ duration: 1.5, repeat: Infinity }}
-          />
-          <motion.div 
-            className="absolute inset-4 rounded-full border-[1px] border-neon-purple/10"
-            animate={isTesting ? { rotate: 360 } : {}}
-            transition={{ duration: 2, repeat: Infinity, ease: "linear" }}
-          />
-          <div className="flex flex-col items-center relative z-10">
-            <Wifi size={48} className={cn(isTesting ? "text-neon-purple animate-pulse" : "text-white/20")} />
-            {speed && (
-              <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }}>
-                <p className="text-5xl font-display font-black text-white mt-2">{speed}</p>
-                <p className="text-[10px] font-display text-white/30 uppercase tracking-widest font-bold">Mbps</p>
-              </motion.div>
-            )}
-          </div>
-        </div>
-
-        <div className="grid grid-cols-3 w-full gap-4">
-          <Card className="text-center p-4">
-            <p className="text-[9px] font-display text-white/30 uppercase tracking-widest mb-1 font-bold">Ping</p>
-            <p className="text-xl font-display font-bold text-neon-purple">{ping ? `${ping} ms` : '--'}</p>
-          </Card>
-          <Card className="text-center p-4">
-            <p className="text-[9px] font-display text-white/30 uppercase tracking-widest mb-1 font-bold">Jitter</p>
-            <p className="text-xl font-display font-bold text-neon-purple">{ping ? `${Math.floor(ping/4)} ms` : '--'}</p>
-          </Card>
-          <Card className="text-center p-4">
-            <p className="text-[9px] font-display text-white/30 uppercase tracking-widest mb-1 font-bold">Signal</p>
-            <p className="text-xl font-display font-bold text-neon-purple">{Math.round(signal)}%</p>
-          </Card>
-        </div>
-      </div>
-
-      <motion.button 
-        whileHover={{ scale: 1.02 }}
-        whileTap={{ scale: 0.98 }}
-        onClick={startTest}
-        disabled={isTesting}
-        className="w-full py-5 rounded-2xl bg-neon-purple text-white font-display font-bold text-lg tracking-[0.2em] uppercase neon-glow-purple"
-      >
-        {isTesting ? "Testing..." : "Start Speed Test"}
-      </motion.button>
-
-      <div className="space-y-4">
-        <h3 className="text-[10px] font-display font-bold text-white/30 uppercase tracking-[0.2em]">Network Info</h3>
-        <Card className="space-y-4 p-5">
-          {[
-            { label: 'Connection', val: networkStatus?.connectionType?.toUpperCase() || '4G / WIFI', color: 'text-neon-green' },
-            { label: 'Status', val: networkStatus?.connected ? 'ONLINE' : 'OFFLINE', color: networkStatus?.connected ? 'text-neon-green' : 'text-neon-red' },
-            { label: 'Security', val: 'WPA3 SECURE', color: 'text-neon-green' }
-          ].map((info) => (
-            <div key={info.label} className="flex justify-between items-center">
-              <span className="text-xs text-white/40 uppercase tracking-wider font-bold">{info.label}</span>
-              <span className={cn("text-sm font-display font-bold", info.color)}>{info.val}</span>
-            </div>
-          ))}
-        </Card>
-      </div>
-    </div>
-  );
-};
-
-const ConfirmationModal = ({ title, message, onConfirm, onCancel }: { title: string; message: string; onConfirm: () => void; onCancel: () => void }) => (
-  <motion.div 
-    initial={{ opacity: 0 }}
-    animate={{ opacity: 1 }}
-    exit={{ opacity: 0 }}
-    className="fixed inset-0 z-[110] bg-bg-deep/80 backdrop-blur-md flex items-center justify-center p-6"
-  >
-    <motion.div 
-      initial={{ scale: 0.9, y: 20 }}
-      animate={{ scale: 1, y: 0 }}
-      exit={{ scale: 0.9, y: 20 }}
-      className="glass p-8 rounded-3xl border border-white/10 max-w-sm w-full space-y-6"
-    >
-      <div className="flex flex-col items-center text-center space-y-4">
-        <div className="p-4 rounded-2xl bg-neon-red/10 text-neon-red">
-          <AlertTriangle size={32} />
-        </div>
-        <h3 className="text-xl font-display font-black text-white uppercase tracking-tight">{title}</h3>
-        <p className="text-sm text-white/40 font-display leading-relaxed">{message}</p>
-      </div>
-      <div className="grid grid-cols-2 gap-4">
-        <button 
-          onClick={onCancel}
-          className="py-4 rounded-2xl bg-white/5 text-white/60 font-display font-bold text-xs uppercase tracking-widest hover:bg-white/10 transition-colors"
-        >
-          Cancel
-        </button>
-        <button 
-          onClick={onConfirm}
-          className="py-4 rounded-2xl bg-neon-red text-white font-display font-bold text-xs uppercase tracking-widest shadow-[0_0_20px_rgba(255,0,85,0.3)]"
-        >
-          Uninstall
-        </button>
-      </div>
-    </motion.div>
-  </motion.div>
+  </div>
 );
-
-const SecurityScan = ({ showToast }: { showToast: (m: string, t?: any) => void }) => {
-  const [isScanning, setIsScanning] = useState(false);
-  const [status, setStatus] = useState<'idle' | 'scanning' | 'safe'>('idle');
-  const [scanProgress, setScanProgress] = useState(0);
-  const [scanLog, setScanLog] = useState<string[]>([]);
-
-  const handleScan = (deep = false) => {
-    setIsScanning(true);
-    setStatus('scanning');
-    setScanProgress(0);
-    setScanLog([]);
-    
-    const logs = deep ? [
-      'Initializing deep core scan...',
-      'Checking system integrity...',
-      'Scanning for rootkits...',
-      'Verifying app signatures...',
-      'Analyzing network protocols...',
-      'Checking for data leaks...',
-      'Verifying kernel security...',
-      'Finalizing security report...'
-    ] : [
-      'Quick scanning apps...',
-      'Checking permissions...',
-      'Scanning cache files...',
-      'Verifying system status...'
-    ];
-
-    let i = 0;
-    const interval = setInterval(() => {
-      if (i < logs.length) {
-        setScanLog(prev => [logs[i], ...prev].slice(0, 4));
-        setScanProgress(((i + 1) / logs.length) * 100);
-        i++;
-      } else {
-        clearInterval(interval);
-        setIsScanning(false);
-        setStatus('safe');
-        showToast(deep ? 'Deep Security Scan Complete' : 'Quick Scan Complete', 'success');
-      }
-    }, deep ? 800 : 600);
-  };
-
-  return (
-    <div className="px-6 space-y-8 pb-32">
-      <div className="flex flex-col items-center justify-center py-12 text-center">
-        <div className="relative w-48 h-48 mb-8">
-          <AnimatePresence mode="wait">
-            {status === 'scanning' ? (
-              <motion.div 
-                key="scanning"
-                initial={{ opacity: 0, rotate: 0 }}
-                animate={{ opacity: 1, rotate: 360 }}
-                transition={{ duration: 2, repeat: Infinity, ease: "linear" }}
-                className="absolute inset-0 flex items-center justify-center"
-              >
-                <div className="w-full h-full rounded-full border-4 border-neon-green/20 border-t-neon-green shadow-[0_0_20px_rgba(0,255,136,0.3)]" />
-                <motion.div 
-                  className="absolute inset-4 rounded-full border-2 border-dashed border-neon-green/40"
-                  animate={{ rotate: -360 }}
-                  transition={{ duration: 4, repeat: Infinity, ease: "linear" }}
-                />
-              </motion.div>
-            ) : status === 'safe' ? (
-              <motion.div 
-                key="safe"
-                initial={{ opacity: 0, scale: 0.5 }}
-                animate={{ opacity: 1, scale: 1 }}
-                className="absolute inset-0 flex items-center justify-center"
-              >
-                <div className="p-10 rounded-full bg-neon-green/10 text-neon-green shadow-[0_0_40px_rgba(0,255,136,0.2)] border border-neon-green/20">
-                  <ShieldCheck size={64} />
-                </div>
-              </motion.div>
-            ) : (
-              <motion.div 
-                key="idle"
-                initial={{ opacity: 0, scale: 0.8 }}
-                animate={{ opacity: 1, scale: 1 }}
-                className="absolute inset-0 flex items-center justify-center"
-              >
-                <div className="p-10 rounded-full bg-neon-green/10 text-neon-green shadow-[0_0_40px_rgba(0,255,136,0.1)] border border-neon-green/20">
-                  <ShieldAlert size={64} />
-                </div>
-              </motion.div>
-            )}
-          </AnimatePresence>
-        </div>
-
-        <h2 className="text-3xl font-display font-black mb-2 text-white">
-          {status === 'scanning' ? `${Math.round(scanProgress)}%` : status === 'safe' ? "Device Secure" : "Security Check"}
-        </h2>
-        {status === 'scanning' && (
-          <div className="w-full max-w-[200px] space-y-2 mt-4">
-            {scanLog.map((log, i) => (
-              <motion.p 
-                key={i}
-                initial={{ opacity: 0, x: -10 }}
-                animate={{ opacity: 1, x: 0 }}
-                className="text-[8px] text-neon-green font-mono uppercase tracking-widest opacity-60 truncate"
-              >
-                {log}
-              </motion.p>
-            ))}
-          </div>
-        )}
-        <p className="text-white/30 text-xs font-display uppercase tracking-widest max-w-[240px] mt-2">
-          {status === 'safe' ? "No threats detected" : "Protect your device from malware"}
-        </p>
-      </div>
-
-      <div className="flex gap-4">
-        <motion.button 
-          whileHover={{ scale: 1.02 }}
-          whileTap={{ scale: 0.98 }}
-          onClick={() => handleScan(false)}
-          disabled={isScanning}
-          className="flex-1 py-5 rounded-2xl bg-white/5 border border-neon-green/20 text-neon-green font-display font-bold text-xs tracking-[0.2em] uppercase"
-        >
-          Quick Scan
-        </motion.button>
-        <motion.button 
-          whileHover={{ scale: 1.02 }}
-          whileTap={{ scale: 0.98 }}
-          onClick={() => handleScan(true)}
-          disabled={isScanning}
-          className="flex-1 py-5 rounded-2xl bg-neon-green text-bg-deep font-display font-bold text-xs tracking-[0.2em] uppercase neon-glow-green"
-        >
-          Deep Scan
-        </motion.button>
-      </div>
-
-      <div className="space-y-3">
-        {[
-          { name: 'Malware Scan', status: status === 'safe' ? 'No threats' : 'Pending', icon: Lock },
-          { name: 'Privacy Check', status: status === 'safe' ? 'Secure' : 'Pending', icon: ShieldCheck },
-          { name: 'App Permissions', status: status === 'safe' ? 'Verified' : 'Pending', icon: Info },
-        ].map((item, i) => (
-          <motion.div 
-            key={item.name} 
-            initial={{ opacity: 0, x: -20 }}
-            animate={{ opacity: 1, x: 0 }}
-            transition={{ delay: i * 0.1 }}
-            className="flex items-center gap-4 p-4 glass rounded-xl"
-          >
-            <div className="p-2 rounded-lg bg-white/5 text-neon-green">
-              <item.icon size={18} />
-            </div>
-            <span className="flex-1 text-sm font-display text-white/60 font-medium">{item.name}</span>
-            <span className={cn(
-              "text-[9px] font-display font-bold uppercase tracking-widest",
-              status === 'safe' ? "text-neon-green" : "text-white/20"
-            )}>
-              {item.status}
-            </span>
-          </motion.div>
-        ))}
-      </div>
-    </div>
-  );
-};
 
 // --- Main App ---
 
-const SettingsView = ({ showToast }: { showToast: (m: string, t?: any) => void }) => {
-  const settingsGroups = [
-    {
-      title: 'General',
-      items: [
-        { label: 'Auto Optimize', desc: 'Boost system every 6 hours', active: true },
-        { label: 'Smart Cleaning', desc: 'Auto remove junk files', active: false },
-      ]
-    },
-    {
-      title: 'Notifications',
-      items: [
-        { label: 'Battery Alerts', desc: 'Notify at 20% and 10%', active: true },
-        { label: 'Security Alerts', desc: 'Real-time threat detection', active: true },
-      ]
-    },
-    {
-      title: 'Appearance',
-      items: [
-        { label: 'Neon Glow', desc: 'Enable UI glow effects', active: true },
-        { label: 'Animations', desc: 'Smooth transitions', active: true },
-      ]
-    }
-  ];
+export default function App() {
+  const [activeTab, setActiveTab] = useState<Tab>('dashboard');
+  const [isOptimizing, setIsOptimizing] = useState(false);
+  const [showConfetti, setShowConfetti] = useState(false);
+  const { width, height } = useWindowSize();
+  
+  // Stats
+  const [ramUsage, setRamUsage] = useState(64);
+  const [cpuTemp, setCpuTemp] = useState(42);
+  const [batteryLevel, setBatteryLevel] = useState(85);
+  const [ping, setPing] = useState(45);
 
-  return (
-    <div className="px-6 space-y-8 pb-32">
-      {settingsGroups.map((group) => (
-        <div key={group.title} className="space-y-4">
-          <h3 className="text-[10px] font-display font-bold text-white/30 uppercase tracking-[0.2em]">{group.title}</h3>
-          <div className="space-y-3">
-            {group.items.map((item) => (
-              <Card key={item.label} className="flex items-center justify-between p-5">
-                <div>
-                  <p className="text-sm font-display font-bold text-white/90">{item.label}</p>
-                  <p className="text-[9px] text-white/30 uppercase tracking-widest font-bold">{item.desc}</p>
-                </div>
-                <div className={cn(
-                  "w-10 h-5 rounded-full relative p-1 transition-colors",
-                  item.active ? "bg-neon-cyan/20 border-neon-cyan/40" : "bg-white/5 border-white/10"
-                )}>
-                  <motion.div 
-                    className={cn(
-                      "w-3 h-3 rounded-full",
-                      item.active ? "bg-neon-cyan shadow-[0_0_8px_rgba(0,245,255,1)]" : "bg-white/20"
-                    )}
-                    animate={{ x: item.active ? 18 : 0 }}
-                  />
-                </div>
-              </Card>
-            ))}
+  // GFX Settings
+  const [gfx, setGfx] = useState<GFXSettings>({
+    resolution: '1920x1080',
+    fps: '60 FPS',
+    graphics: 'Smooth',
+    style: 'Colorful',
+    shadows: true,
+    msaa: false
+  });
+
+  // Sensitivity Settings
+  const [sens, setSens] = useState<SensitivitySettings>({
+    general: 85,
+    redDot: 70,
+    scope2x: 65,
+    scope4x: 55,
+    sniper: 40,
+    freeLook: 50
+  });
+
+  // Crosshair Settings
+  const [crosshair, setCrosshair] = useState<CrosshairSettings>({
+    type: 'Classic',
+    color: '#00f5ff',
+    size: 15,
+    opacity: 100,
+    thickness: 2
+  });
+
+  // Simulation Effects
+  useEffect(() => {
+    const interval = setInterval(() => {
+      setRamUsage(prev => Math.min(95, Math.max(40, prev + (Math.random() * 4 - 2))));
+      setCpuTemp(prev => Math.min(85, Math.max(35, prev + (Math.random() * 2 - 1))));
+      setPing(prev => Math.min(200, Math.max(20, prev + (Math.random() * 10 - 5))));
+    }, 3000);
+    return () => clearInterval(interval);
+  }, []);
+
+  const handleOptimize = useCallback(() => {
+    setIsOptimizing(true);
+    // Simulate optimization steps
+    setTimeout(() => {
+      setRamUsage(42);
+      setCpuTemp(36);
+      setPing(24);
+      setIsOptimizing(false);
+      setShowConfetti(true);
+      setTimeout(() => setShowConfetti(false), 5000);
+    }, 3000);
+  }, []);
+
+  const renderDashboard = () => (
+    <div className="space-y-6 p-6 pb-32">
+      {/* Hero Section */}
+      <div className="relative h-48 rounded-3xl overflow-hidden group">
+        <img 
+          src="https://picsum.photos/seed/gaming/800/400" 
+          alt="Gaming" 
+          className="w-full h-full object-cover transition-transform duration-700 group-hover:scale-110"
+          referrerPolicy="no-referrer"
+        />
+        <div className="absolute inset-0 bg-gradient-to-t from-bg-deep via-bg-deep/40 to-transparent" />
+        <div className="absolute bottom-6 left-6 right-6 flex justify-between items-end">
+          <div className="space-y-1">
+            <h2 className="text-2xl font-display font-black tracking-tighter text-white uppercase italic">Free Fire Pro</h2>
+            <p className="text-[10px] uppercase tracking-[0.3em] text-neon-cyan font-bold">Optimization Active</p>
           </div>
+          <motion.button 
+            whileHover={{ scale: 1.05 }}
+            whileTap={{ scale: 0.95 }}
+            onClick={handleOptimize}
+            disabled={isOptimizing}
+            className={cn(
+              "px-6 py-3 rounded-2xl font-display font-bold text-xs tracking-widest uppercase transition-all duration-500",
+              isOptimizing ? "bg-white/10 text-white/40" : "bg-neon-cyan text-bg-deep neon-glow-cyan"
+            )}
+          >
+            {isOptimizing ? "Optimizing..." : "Boost Now"}
+          </motion.button>
         </div>
-      ))}
-      
-      <div className="pt-4 space-y-3">
-        <Card 
-          className="p-6 border-neon-cyan/20 bg-neon-cyan/5 cursor-pointer"
-          onClick={() => {
-            showToast('Checking for updates...', 'info');
-            setTimeout(() => showToast('App is up to date', 'success'), 2000);
-          }}
-        >
-          <div className="flex items-center gap-4 text-neon-cyan">
-            <RefreshCw size={20} />
-            <div>
-              <p className="text-sm font-display font-bold">Check for Updates</p>
-              <p className="text-[9px] uppercase tracking-widest font-bold opacity-60">Version 2.4.0</p>
-            </div>
-          </div>
-        </Card>
+      </div>
 
-        <Card className="p-6 border-neon-red/20 bg-neon-red/5 cursor-pointer">
-          <div className="flex items-center gap-4 text-neon-red">
-            <AlertTriangle size={20} />
-            <div>
-              <p className="text-sm font-display font-bold">Reset All Settings</p>
-              <p className="text-[9px] uppercase tracking-widest font-bold opacity-60">Restore to factory defaults</p>
+      {/* Stats Grid */}
+      <div className="grid grid-cols-2 gap-4">
+        <Card className="flex flex-col gap-4 p-5">
+          <div className="flex justify-between items-center">
+            <div className="p-2 rounded-xl bg-neon-cyan/10">
+              <Cpu size={20} className="text-neon-cyan" />
             </div>
+            <span className="text-xs font-display font-bold text-neon-cyan">{cpuTemp}°C</span>
           </div>
+          <ProgressBar progress={cpuTemp} colorClass="text-neon-cyan" label="CPU Temp" />
+        </Card>
+        <Card className="flex flex-col gap-4 p-5">
+          <div className="flex justify-between items-center">
+            <div className="p-2 rounded-xl bg-neon-purple/10">
+              <Layers size={20} className="text-neon-purple" />
+            </div>
+            <span className="text-xs font-display font-bold text-neon-purple">{Math.round(ramUsage)}%</span>
+          </div>
+          <ProgressBar progress={ramUsage} colorClass="text-neon-purple" label="RAM Usage" />
         </Card>
       </div>
-      
-      <div className="text-center opacity-20 py-4">
-        <p className="text-[10px] font-display uppercase tracking-[0.4em]">Ultra Optimize X v2.4.0</p>
+
+      {/* Main Tools */}
+      <div className="grid grid-cols-2 gap-4">
+        <Card onClick={() => setActiveTab('gfx')} className="flex flex-col items-center gap-3 py-6">
+          <Monitor size={28} className="text-neon-cyan" />
+          <span className="text-xs font-bold uppercase tracking-widest">GFX Tool</span>
+        </Card>
+        <Card onClick={() => setActiveTab('sensitivity')} className="flex flex-col items-center gap-3 py-6">
+          <Sliders size={28} className="text-neon-purple" />
+          <span className="text-xs font-bold uppercase tracking-widest">Sensitivity</span>
+        </Card>
+        <Card onClick={() => setActiveTab('crosshair')} className="flex flex-col items-center gap-3 py-6">
+          <Target size={28} className="text-neon-green" />
+          <span className="text-xs font-bold uppercase tracking-widest">Crosshair</span>
+        </Card>
+        <Card onClick={() => setActiveTab('network')} className="flex flex-col items-center gap-3 py-6">
+          <Wifi size={28} className="text-neon-orange" />
+          <span className="text-xs font-bold uppercase tracking-widest">Ping Fix</span>
+        </Card>
+      </div>
+
+      {/* System Tools */}
+      <h3 className="text-[10px] uppercase tracking-[0.3em] text-white/40 font-bold ml-1">System Optimization</h3>
+      <div className="space-y-3">
+        <Card onClick={() => setActiveTab('cleaner')} className="flex items-center gap-4 p-4">
+          <div className="p-3 rounded-2xl bg-neon-red/10">
+            <Trash2 size={24} className="text-neon-red" />
+          </div>
+          <div className="flex-1">
+            <h4 className="text-sm font-bold text-white">Junk Cleaner</h4>
+            <p className="text-[10px] text-white/40 uppercase tracking-wider">2.4 GB Cache Found</p>
+          </div>
+          <ChevronRight size={20} className="text-white/20" />
+        </Card>
+        <Card onClick={() => setActiveTab('battery')} className="flex items-center gap-4 p-4">
+          <div className="p-3 rounded-2xl bg-neon-green/10">
+            <Battery size={24} className="text-neon-green" />
+          </div>
+          <div className="flex-1">
+            <h4 className="text-sm font-bold text-white">Battery Saver</h4>
+            <p className="text-[10px] text-white/40 uppercase tracking-wider">85% • 12h Remaining</p>
+          </div>
+          <ChevronRight size={20} className="text-white/20" />
+        </Card>
+        <Card onClick={() => setActiveTab('cooler')} className="flex items-center gap-4 p-4">
+          <div className="p-3 rounded-2xl bg-neon-cyan/10">
+            <Thermometer size={24} className="text-neon-cyan" />
+          </div>
+          <div className="flex-1">
+            <h4 className="text-sm font-bold text-white">Phone Cooler</h4>
+            <p className="text-[10px] text-white/40 uppercase tracking-wider">Normal Temperature</p>
+          </div>
+          <ChevronRight size={20} className="text-white/20" />
+        </Card>
       </div>
     </div>
   );
-};
 
-const Toast = ({ message, type, onClose }: { message: string; type: 'success' | 'info' | 'error'; onClose: () => void }) => (
-  <motion.div
-    initial={{ y: 100, opacity: 0 }}
-    animate={{ y: 0, opacity: 1 }}
-    exit={{ y: 100, opacity: 0 }}
-    className="fixed bottom-28 left-6 right-6 z-[100]"
-  >
-    <div className={cn(
-      "glass p-4 rounded-2xl border flex items-center gap-3 shadow-2xl",
-      type === 'success' ? "border-neon-green/30 bg-neon-green/5" : 
-      type === 'error' ? "border-neon-red/30 bg-neon-red/5" : "border-neon-cyan/30 bg-neon-cyan/5"
-    )}>
-      <div className={cn(
-        "p-2 rounded-lg",
-        type === 'success' ? "text-neon-green bg-neon-green/10" : 
-        type === 'error' ? "text-neon-red bg-neon-red/10" : "text-neon-cyan bg-neon-cyan/10"
-      )}>
-        {type === 'success' ? <CheckCircle2 size={18} /> : type === 'error' ? <AlertTriangle size={18} /> : <Info size={18} />}
-      </div>
-      <p className="text-xs font-display font-bold text-white/90 flex-1">{message}</p>
-      <button onClick={onClose} className="text-white/20 hover:text-white/40">
-        <X size={16} />
-      </button>
-    </div>
-  </motion.div>
-);
-
-const CPUCooler = ({ showToast }: { showToast: (m: string, t?: any) => void }) => {
-  const [isBoosting, setIsBoosting] = useState(false);
-
-  return (
-    <div className="px-6 space-y-8 pb-32">
-      <div className="flex flex-col items-center justify-center py-12 text-center">
-        <div className="relative w-48 h-48 mb-8 flex items-center justify-center">
-          <motion.div 
-            className="absolute inset-0 bg-neon-cyan/5 rounded-full blur-3xl"
-            animate={{ scale: [1, 1.3, 1], opacity: [0.2, 0.4, 0.2] }}
-            transition={{ duration: 5, repeat: Infinity }}
-          />
-          <div className="relative z-10 flex flex-col items-center">
-            <Thermometer size={80} className="text-neon-cyan mb-4 drop-shadow-[0_0_20px_rgba(0,245,255,0.4)]" />
-            <motion.span 
-              initial={{ opacity: 0 }}
-              animate={{ opacity: 1 }}
-              className="text-5xl font-display font-black text-white"
-            >
-              {isBoosting ? '28°C' : '34°C'}
-            </motion.span>
-          </div>
-          <motion.div 
-            className="absolute inset-0 rounded-full border border-neon-cyan/20"
-            animate={{ rotate: 360 }}
-            transition={{ duration: 10, repeat: Infinity, ease: "linear" }}
-          />
-          <motion.div 
-            className="absolute inset-4 rounded-full border border-dashed border-neon-cyan/10"
-            animate={{ rotate: -360 }}
-            transition={{ duration: 15, repeat: Infinity, ease: "linear" }}
-          />
-        </div>
-        <h2 className="text-2xl font-display font-black text-white mb-1">Temperature: {isBoosting ? 'Cooling...' : 'Normal'}</h2>
-        <p className="text-white/30 uppercase tracking-[0.3em] text-[10px] font-bold">{isBoosting ? 'Optimizing CPU cycles' : 'CPU is running cool'}</p>
+  const renderGFX = () => (
+    <div className="space-y-6 p-6 pb-32">
+      <OptionGrid 
+        label="Resolution" 
+        options={['960x540', '1280x720', '1920x1080', '2560x1440']} 
+        selected={gfx.resolution} 
+        onSelect={(s) => setGfx({...gfx, resolution: s})} 
+      />
+      <OptionGrid 
+        label="FPS Limit" 
+        options={['30 FPS', '40 FPS', '60 FPS', '90 FPS']} 
+        selected={gfx.fps} 
+        onSelect={(s) => setGfx({...gfx, fps: s})} 
+      />
+      <OptionGrid 
+        label="Graphics" 
+        options={['Smooth', 'Balanced', 'HD', 'HDR']} 
+        selected={gfx.graphics} 
+        onSelect={(s) => setGfx({...gfx, graphics: s})} 
+      />
+      <OptionGrid 
+        label="Style" 
+        options={['Classic', 'Colorful', 'Realistic', 'Soft']} 
+        selected={gfx.style} 
+        onSelect={(s) => setGfx({...gfx, style: s})} 
+      />
+      
+      <div className="space-y-3">
+        <Toggle label="Shadows" active={gfx.shadows} onToggle={() => setGfx({...gfx, shadows: !gfx.shadows})} />
+        <Toggle label="Anti-Aliasing (MSAA)" active={gfx.msaa} onToggle={() => setGfx({...gfx, msaa: !gfx.msaa})} />
       </div>
 
       <motion.button 
         whileHover={{ scale: 1.02 }}
         whileTap={{ scale: 0.98 }}
-        onClick={() => {
-          setIsBoosting(true);
-          setTimeout(() => {
-            setIsBoosting(false);
-            showToast('CPU Cooled Successfully', 'success');
-          }, 3000);
-        }}
-        disabled={isBoosting}
-        className="w-full py-5 rounded-2xl bg-neon-cyan text-bg-deep font-display font-bold text-lg tracking-[0.2em] uppercase neon-glow-cyan"
+        onClick={handleOptimize}
+        className="w-full py-4 rounded-2xl bg-neon-cyan text-bg-deep font-display font-bold uppercase tracking-widest neon-glow-cyan"
       >
-        {isBoosting ? 'Cooling Down...' : 'Cool Down Now'}
+        Apply Settings
       </motion.button>
+    </div>
+  );
+
+  const renderSensitivity = () => (
+    <div className="space-y-4 p-6 pb-32">
+      <div className="p-6 rounded-3xl bg-neon-purple/5 border border-neon-purple/20 flex flex-col items-center gap-4">
+        <div className="p-4 rounded-full bg-neon-purple/10">
+          <MousePointer2 size={32} className="text-neon-purple" />
+        </div>
+        <div className="text-center">
+          <h3 className="text-lg font-display font-bold text-white uppercase italic">Pro Sensitivity</h3>
+          <p className="text-[10px] text-white/40 uppercase tracking-widest">Optimized for Free Fire Headshots</p>
+        </div>
+      </div>
+
+      <Slider label="General" value={sens.general} onChange={(v) => setSens({...sens, general: v})} icon={Activity} />
+      <Slider label="Red Dot" value={sens.redDot} onChange={(v) => setSens({...sens, redDot: v})} icon={Target} />
+      <Slider label="2x Scope" value={sens.scope2x} onChange={(v) => setSens({...sens, scope2x: v})} icon={Search} />
+      <Slider label="4x Scope" value={sens.scope4x} onChange={(v) => setSens({...sens, scope4x: v})} icon={Search} />
+      <Slider label="Sniper Scope" value={sens.sniper} onChange={(v) => setSens({...sens, sniper: v})} icon={Crosshair} />
+      <Slider label="Free Look" value={sens.freeLook} onChange={(v) => setSens({...sens, freeLook: v})} icon={Activity} />
+
+      <motion.button 
+        whileHover={{ scale: 1.02 }}
+        whileTap={{ scale: 0.98 }}
+        onClick={handleOptimize}
+        className="w-full py-4 rounded-2xl bg-neon-purple text-white font-display font-bold uppercase tracking-widest neon-glow-purple"
+      >
+        Save Sensitivity
+      </motion.button>
+    </div>
+  );
+
+  const renderCrosshair = () => (
+    <div className="space-y-6 p-6 pb-32">
+      <div className="h-48 rounded-3xl bg-white/5 border border-white/10 flex items-center justify-center relative overflow-hidden cyber-grid">
+        <div className="absolute inset-0 bg-gradient-to-br from-neon-cyan/5 to-transparent" />
+        {/* Preview Crosshair */}
+        <div className="relative z-10">
+          {crosshair.type === 'Classic' && <div className="w-1 h-1 bg-neon-cyan rounded-full shadow-[0_0_10px_#00f5ff]" style={{ backgroundColor: crosshair.color, width: crosshair.size/2, height: crosshair.size/2, opacity: crosshair.opacity/100 }} />}
+          {crosshair.type === 'Circle' && <div className="rounded-full border-2" style={{ borderColor: crosshair.color, width: crosshair.size, height: crosshair.size, opacity: crosshair.opacity/100, borderWidth: crosshair.thickness }} />}
+          {crosshair.type === 'Dot' && <div className="rounded-full" style={{ backgroundColor: crosshair.color, width: crosshair.size/3, height: crosshair.size/3, opacity: crosshair.opacity/100 }} />}
+          {crosshair.type === 'Cross' && (
+            <div className="relative" style={{ opacity: crosshair.opacity/100 }}>
+              <div className="absolute left-1/2 -translate-x-1/2" style={{ backgroundColor: crosshair.color, width: crosshair.thickness, height: crosshair.size }} />
+              <div className="absolute top-1/2 -translate-y-1/2" style={{ backgroundColor: crosshair.color, width: crosshair.size, height: crosshair.thickness }} />
+            </div>
+          )}
+        </div>
+      </div>
+
+      <OptionGrid 
+        label="Crosshair Type" 
+        options={['Classic', 'Circle', 'Dot', 'Cross']} 
+        selected={crosshair.type} 
+        onSelect={(s) => setCrosshair({...crosshair, type: s})} 
+      />
 
       <div className="space-y-4">
-        <h3 className="text-[10px] font-display font-bold text-white/30 uppercase tracking-[0.2em]">Heat Sources</h3>
-        <div className="space-y-3">
-          {[
-            { name: 'System UI', impact: 'Low', icon: Cpu },
-            { name: 'Background Apps', impact: 'Minimal', icon: Layers },
-            { name: 'Display', impact: 'Moderate', icon: Info },
-          ].map((item, i) => (
-            <motion.div 
-              key={item.name}
-              initial={{ opacity: 0, y: 10 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ delay: i * 0.1 }}
-              className="flex items-center gap-4 p-4 glass rounded-xl"
-            >
-              <div className="p-2 rounded-lg bg-white/5 text-neon-cyan">
-                <item.icon size={18} />
-              </div>
-              <span className="flex-1 text-sm font-display text-white/60 font-medium">{item.name}</span>
-              <span className="text-[9px] font-display font-bold uppercase tracking-widest text-neon-cyan">
-                {item.impact}
-              </span>
-            </motion.div>
+        <Slider label="Size" value={crosshair.size} onChange={(v) => setCrosshair({...crosshair, size: v})} min={5} max={50} />
+        <Slider label="Opacity" value={crosshair.opacity} onChange={(v) => setCrosshair({...crosshair, opacity: v})} />
+        <Slider label="Thickness" value={crosshair.thickness} onChange={(v) => setCrosshair({...crosshair, thickness: v})} min={1} max={10} />
+      </div>
+
+      <div className="space-y-3">
+        <span className="text-[10px] uppercase tracking-widest text-white/40 font-bold ml-1">Color</span>
+        <div className="flex gap-3">
+          {['#00f5ff', '#bf00ff', '#00ff88', '#ff6b00', '#ff0055', '#f0ff00'].map(c => (
+            <button 
+              key={c}
+              onClick={() => setCrosshair({...crosshair, color: c})}
+              className={cn(
+                "w-10 h-10 rounded-full border-2 transition-all duration-300",
+                crosshair.color === c ? "border-white scale-110" : "border-transparent"
+              )}
+              style={{ backgroundColor: c }}
+            />
           ))}
         </div>
       </div>
     </div>
   );
-};
 
-export default function App() {
-  const [activeTab, setActiveTab] = useState<Tab>('dashboard');
-  const [viewStack, setViewStack] = useState<Tab[]>(['dashboard']);
-  const [isSplash, setIsSplash] = useState(true);
-  const [battery, setBattery] = useState<BatteryStatus | null>(null);
-  const [deviceInfo, setDeviceInfo] = useState<any>(null);
-  const [networkStatus, setNetworkStatus] = useState<NetworkStatus | null>(null);
-  const [storageInfo, setStorageInfo] = useState<{ free: number; total: number } | null>(null);
-  const [apps, setApps] = useState(MOCK_APPS);
-  const [isLaunchingGame, setIsLaunchingGame] = useState<string | null>(null);
-  const [appToUninstall, setAppToUninstall] = useState<AppInfo | null>(null);
-  const [toast, setToast] = useState<{ message: string; type: 'success' | 'info' | 'error' } | null>(null);
-  const [fps, setFps] = useState(60);
-
-  useEffect(() => {
-    const interval = setInterval(() => {
-      setFps(prev => Math.max(55, Math.min(62, prev + (Math.random() * 2 - 1))));
-    }, 1000);
-    return () => clearInterval(interval);
-  }, []);
-
-  const showToast = (message: string, type: 'success' | 'info' | 'error' = 'info') => {
-    setToast({ message, type });
-    setTimeout(() => setToast(null), 3000);
-  };
-
-  useEffect(() => {
-    (window as any).navigateToSettings = () => navigateTo('settings');
-    // Initialize Capacitor features
-    const initCapacitor = async () => {
-      try {
-        // Hide native splash screen
-        await SplashScreen.hide();
-        
-        // Style status bar
-        await StatusBar.setStyle({ style: Style.Dark });
-        await StatusBar.setBackgroundColor({ color: '#050508' });
-
-        // Get device info
-        const info = await Device.getInfo();
-        setDeviceInfo(info);
-
-        // Get network status
-        const status = await Network.getStatus();
-        setNetworkStatus(status);
-
-        // Listen for network changes
-        Network.addListener('networkStatusChange', status => {
-          setNetworkStatus(status);
-        });
-
-        // Get storage info
-        try {
-          const storage = await (Filesystem as any).getFreeSpace({ directory: 'EXTERNAL' });
-          setStorageInfo({ free: Math.round(storage.free / (1024 * 1024 * 1024)), total: 128 });
-        } catch (e) {
-          console.warn("Storage info not available:", e);
-          setStorageInfo({ free: 64, total: 128 });
-        }
-
-        // Handle back button
-        CapacitorApp.addListener('backButton', ({ canGoBack }) => {
-          if (canGoBack) {
-            goBack();
-          } else {
-            CapacitorApp.exitApp();
-          }
-        });
-      } catch (e) {
-        console.warn("Capacitor plugins not available or blocked:", e);
-      }
-    };
-    
-    initCapacitor();
-
-    // Real Battery Data
-    const initBattery = async () => {
-      try {
-        if ('getBattery' in navigator) {
-          const batt = await (navigator as any).getBattery();
-          const updateBattery = () => {
-            setBattery({
-              level: Math.round(batt.level * 100),
-              charging: batt.charging,
-              chargingTime: batt.chargingTime,
-              dischargingTime: batt.dischargingTime
-            });
-          };
-          updateBattery();
-          batt.addEventListener('levelchange', updateBattery);
-          batt.addEventListener('chargingchange', updateBattery);
-        }
-      } catch (e) {
-        console.warn("Battery API blocked or unavailable:", e);
-        // Fallback to mock data if needed, but state already has default logic
-      }
-    };
-    
-    initBattery();
-
-    const timer = setTimeout(() => setIsSplash(false), 2500);
-    return () => clearTimeout(timer);
-  }, []);
-
-  const navigateTo = (tab: Tab) => {
-    if (tab === activeTab) return;
-    setActiveTab(tab);
-    setViewStack(prev => [...prev, tab]);
-  };
-
-  const goBack = () => {
-    if (viewStack.length > 1) {
-      const newStack = [...viewStack];
-      newStack.pop();
-      const prevTab = newStack[newStack.length - 1];
-      setActiveTab(prevTab);
-      setViewStack(newStack);
-    } else {
-      setActiveTab('dashboard');
-    }
-  };
-
-  if (isSplash) {
-    return (
-      <div className="min-h-screen bg-bg-deep flex flex-col items-center justify-center p-6 text-center">
-        <motion.div
-          initial={{ scale: 0.5, opacity: 0 }}
-          animate={{ scale: 1, opacity: 1 }}
-          transition={{ duration: 0.8, ease: "easeOut" }}
-          className="relative"
-        >
-          <div className="w-32 h-32 rounded-3xl bg-neon-cyan/10 flex items-center justify-center mb-6 relative overflow-hidden border border-neon-cyan/20">
-            <Zap size={64} className="text-neon-cyan drop-shadow-[0_0_15px_rgba(0,245,255,0.8)]" />
-            <motion.div 
-              className="absolute inset-0 bg-gradient-to-tr from-neon-cyan/20 to-transparent"
-              animate={{ opacity: [0.2, 0.5, 0.2] }}
-              transition={{ duration: 2, repeat: Infinity }}
-            />
+  const renderNetwork = () => (
+    <div className="space-y-6 p-6 pb-32">
+      <Card className="p-8 flex flex-col items-center gap-6">
+        <div className="relative">
+          <div className="absolute inset-0 bg-neon-orange/20 blur-3xl rounded-full" />
+          <div className={cn(
+            "w-32 h-32 rounded-full border-4 flex items-center justify-center transition-all duration-500",
+            ping < 50 ? "border-neon-green neon-glow-green" : ping < 100 ? "border-neon-orange neon-glow-orange" : "border-neon-red neon-glow-red"
+          )}>
+            <div className="text-center">
+              <span className="text-3xl font-display font-black text-white">{Math.round(ping)}</span>
+              <p className="text-[10px] uppercase tracking-widest text-white/40 font-bold">ms</p>
+            </div>
           </div>
-        </motion.div>
-        <motion.h1 
-          initial={{ y: 20, opacity: 0 }}
-          animate={{ y: 0, opacity: 1 }}
-          transition={{ delay: 0.5 }}
-          className="text-3xl font-display font-black text-white tracking-tighter uppercase"
-        >
-          Ultra <span className="text-neon-cyan">Optimize</span> X
-        </motion.h1>
-        <motion.p 
-          initial={{ opacity: 0 }}
-          animate={{ opacity: 1 }}
-          transition={{ delay: 1 }}
-          className="text-white/40 text-xs font-display tracking-[0.3em] uppercase mt-2"
-        >
-          Powered by AI Engine
-        </motion.p>
-        
-        <div className="absolute bottom-12 left-0 right-0 px-12">
-          <div className="w-full h-1 bg-white/5 rounded-full overflow-hidden">
-            <motion.div 
-              className="h-full bg-neon-cyan"
-              initial={{ width: '0%' }}
-              animate={{ width: '100%' }}
-              transition={{ duration: 2.2, ease: "easeInOut" }}
-            />
-          </div>
+        </div>
+        <div className="text-center space-y-1">
+          <h3 className="text-lg font-display font-bold text-white uppercase italic">Ping Stabilizer</h3>
+          <p className="text-xs text-white/60">Optimizing network packets for low latency</p>
+        </div>
+      </Card>
+
+      <div className="space-y-3">
+        <Toggle label="DNS Optimization" active={true} onToggle={() => {}} />
+        <Toggle label="Background Data Restrict" active={true} onToggle={() => {}} />
+        <Toggle label="Gaming Mode Network" active={true} onToggle={() => {}} />
+      </div>
+
+      <motion.button 
+        whileHover={{ scale: 1.02 }}
+        whileTap={{ scale: 0.98 }}
+        onClick={handleOptimize}
+        className="w-full py-4 rounded-2xl bg-neon-orange text-white font-display font-bold uppercase tracking-widest neon-glow-orange"
+      >
+        Stabilize Connection
+      </motion.button>
+    </div>
+  );
+
+  const renderApps = () => (
+    <div className="space-y-6 p-6 pb-32">
+      <div className="relative">
+        <Search className="absolute left-4 top-1/2 -translate-y-1/2 text-white/20" size={20} />
+        <input 
+          type="text" 
+          placeholder="Search Games & Apps..." 
+          className="w-full bg-white/5 border border-white/10 rounded-2xl py-4 pl-12 pr-4 text-sm focus:outline-none focus:border-neon-cyan/50 transition-colors"
+        />
+      </div>
+
+      <div className="space-y-4">
+        <h3 className="text-[10px] uppercase tracking-[0.3em] text-white/40 font-bold ml-1">Installed Games</h3>
+        <div className="grid grid-cols-1 gap-3">
+          {MOCK_APPS.filter(a => a.isGame).map(app => (
+            <Card key={app.id} className="flex items-center gap-4 p-4">
+              <div className="w-12 h-12 rounded-2xl bg-white/5 flex items-center justify-center text-2xl">
+                {app.icon}
+              </div>
+              <div className="flex-1">
+                <h4 className="text-sm font-bold text-white">{app.name}</h4>
+                <p className="text-[10px] text-white/40 uppercase tracking-wider">{app.size} • {app.lastUsed}</p>
+              </div>
+              <motion.button 
+                whileHover={{ scale: 1.1 }}
+                whileTap={{ scale: 0.9 }}
+                className="p-2 rounded-xl bg-neon-cyan/10 text-neon-cyan"
+              >
+                <Play size={20} fill="currentColor" />
+              </motion.button>
+            </Card>
+          ))}
+        </div>
+
+        <h3 className="text-[10px] uppercase tracking-[0.3em] text-white/40 font-bold ml-1 mt-6">Other Apps</h3>
+        <div className="grid grid-cols-1 gap-3">
+          {MOCK_APPS.filter(a => !a.isGame).map(app => (
+            <Card key={app.id} className="flex items-center gap-4 p-4">
+              <div className="w-12 h-12 rounded-2xl bg-white/5 flex items-center justify-center text-2xl">
+                {app.icon}
+              </div>
+              <div className="flex-1">
+                <h4 className="text-sm font-bold text-white">{app.name}</h4>
+                <p className="text-[10px] text-white/40 uppercase tracking-wider">{app.size} • {app.lastUsed}</p>
+              </div>
+              <ChevronRight size={20} className="text-white/20" />
+            </Card>
+          ))}
         </div>
       </div>
-    );
-  }
+    </div>
+  );
 
-  const renderContent = () => {
-    switch (activeTab) {
-      case 'dashboard': return <Dashboard onNavigate={navigateTo} battery={battery} deviceInfo={deviceInfo} showToast={showToast} />;
-      case 'cleaner': return <JunkCleaner showToast={showToast} />;
-      case 'booster': return <RAMBooster showToast={showToast} />;
-      case 'network': return <NetworkSpeed networkStatus={networkStatus} showToast={showToast} />;
-      case 'security': return <SecurityScan showToast={showToast} />;
-      case 'settings': return <SettingsView showToast={showToast} />;
-      case 'game': return (
-        <div className="px-6 space-y-8 pb-32">
-          {isLaunchingGame && (
-            <motion.div 
-              initial={{ opacity: 0 }}
-              animate={{ opacity: 1 }}
-              className="fixed inset-0 z-[100] bg-bg-deep flex flex-col items-center justify-center p-10 text-center"
-            >
-              <div className="w-24 h-24 rounded-3xl bg-neon-green/10 flex items-center justify-center mb-6 border border-neon-green/20">
-                <Play size={48} className="text-neon-green animate-pulse" />
-              </div>
-              <h2 className="text-2xl font-display font-black text-white mb-2">Launching {isLaunchingGame}...</h2>
-              <p className="text-white/30 text-xs font-display uppercase tracking-widest">Optimizing GPU & Memory</p>
-              <div className="w-48 h-1 bg-white/5 rounded-full mt-8 overflow-hidden">
-                <motion.div 
-                  className="h-full bg-neon-green"
-                  initial={{ width: '0%' }}
-                  animate={{ width: '100%' }}
-                  transition={{ duration: 2 }}
-                />
-              </div>
-            </motion.div>
-          )}
-          <div className="flex flex-col items-center justify-center py-10 text-center">
-            <div className="relative w-32 h-32 mb-6">
-              <motion.div 
-                className="absolute inset-0 bg-neon-green/10 rounded-full blur-2xl"
-                animate={{ scale: [1, 1.2, 1] }}
-                transition={{ duration: 3, repeat: Infinity }}
-              />
-              <Play size={80} className="text-neon-green relative z-10 drop-shadow-[0_0_20px_rgba(0,255,136,0.5)]" />
-            </div>
-            <h2 className="text-3xl font-display font-black mb-1 text-white">Game Booster</h2>
-            <div className="flex items-center gap-2">
-              <p className="text-white/30 uppercase tracking-[0.3em] text-[10px] font-bold">Max Performance Mode</p>
-              <span className="text-neon-green text-[10px] font-mono font-bold animate-pulse">{Math.round(fps)} FPS</span>
-            </div>
+  const renderSettings = () => (
+    <div className="space-y-6 p-6 pb-32">
+      <div className="space-y-3">
+        <h3 className="text-[10px] uppercase tracking-[0.3em] text-white/40 font-bold ml-1">General</h3>
+        <Card className="p-0 overflow-hidden">
+          <div className="divide-y divide-white/5">
+            <button className="w-full flex items-center gap-4 p-4 hover:bg-white/5 transition-colors">
+              <Bell size={20} className="text-neon-cyan" />
+              <span className="flex-1 text-left text-sm font-medium">Notifications</span>
+              <ChevronRight size={16} className="text-white/20" />
+            </button>
+            <button className="w-full flex items-center gap-4 p-4 hover:bg-white/5 transition-colors">
+              <Palette size={20} className="text-neon-purple" />
+              <span className="flex-1 text-left text-sm font-medium">Theme Customization</span>
+              <ChevronRight size={16} className="text-white/20" />
+            </button>
+            <button className="w-full flex items-center gap-4 p-4 hover:bg-white/5 transition-colors">
+              <ShieldCheck size={20} className="text-neon-green" />
+              <span className="flex-1 text-left text-sm font-medium">Privacy & Security</span>
+              <ChevronRight size={16} className="text-white/20" />
+            </button>
           </div>
+        </Card>
+      </div>
 
-          <Card className="flex items-center justify-between p-5">
-            <div className="flex items-center gap-4">
-              <div className="p-3 rounded-2xl bg-neon-cyan/10 text-neon-cyan">
-                <ShieldAlert size={20} />
-              </div>
-              <div>
-                <p className="text-sm font-display font-bold text-white/90">Do Not Disturb</p>
-                <p className="text-[9px] text-white/30 uppercase tracking-wider">Block notifications</p>
-              </div>
-            </div>
-            <div className="w-12 h-6 bg-neon-cyan/10 rounded-full relative p-1 border border-neon-cyan/20">
-              <motion.div 
-                className="w-4 h-4 bg-neon-cyan rounded-full shadow-[0_0_10px_rgba(0,245,255,1)]"
-                animate={{ x: 20 }}
-              />
-            </div>
-          </Card>
+      <div className="space-y-3">
+        <h3 className="text-[10px] uppercase tracking-[0.3em] text-white/40 font-bold ml-1">Support</h3>
+        <Card className="p-0 overflow-hidden">
+          <div className="divide-y divide-white/5">
+            <button className="w-full flex items-center gap-4 p-4 hover:bg-white/5 transition-colors">
+              <HelpCircle size={20} className="text-neon-orange" />
+              <span className="flex-1 text-left text-sm font-medium">Help Center</span>
+              <ChevronRight size={16} className="text-white/20" />
+            </button>
+            <button className="w-full flex items-center gap-4 p-4 hover:bg-white/5 transition-colors">
+              <Share2 size={20} className="text-neon-cyan" />
+              <span className="flex-1 text-left text-sm font-medium">Share with Friends</span>
+              <ChevronRight size={16} className="text-white/20" />
+            </button>
+            <button className="w-full flex items-center gap-4 p-4 hover:bg-white/5 transition-colors">
+              <Star size={20} className="text-neon-yellow" />
+              <span className="flex-1 text-left text-sm font-medium">Rate Us</span>
+              <ChevronRight size={16} className="text-white/20" />
+            </button>
+          </div>
+        </Card>
+      </div>
 
-          <div className="space-y-4">
-            <h3 className="text-[10px] font-display font-bold text-white/30 uppercase tracking-[0.2em]">Installed Games</h3>
-            <div className="grid grid-cols-1 gap-4">
-              {apps.filter(app => app.isGame).map((game) => (
-                <Card key={game.id} className="flex items-center gap-4 p-4">
-                  <div className="w-14 h-14 flex items-center justify-center bg-white/5 rounded-2xl text-3xl">
-                    {game.icon}
-                  </div>
-                  <div className="flex-1">
-                    <p className="font-display font-bold text-white/90">{game.name}</p>
-                    <p className="text-[9px] text-neon-green font-bold uppercase tracking-widest">Optimized</p>
-                  </div>
-                  <motion.button 
-                    whileHover={{ scale: 1.05 }}
-                    whileTap={{ scale: 0.95 }}
-                    onClick={() => {
-                      setIsLaunchingGame(game.name);
-                      setTimeout(() => {
-                        setIsLaunchingGame(null);
-                        showToast(`${game.name} Launched Successfully`, 'success');
-                      }, 2500);
-                    }}
-                    className="px-5 py-2.5 rounded-xl bg-neon-green text-bg-deep font-display font-bold text-[10px] uppercase tracking-widest shadow-[0_0_15px_rgba(0,255,136,0.3)]"
-                  >
-                    Launch
-                  </motion.button>
-                </Card>
-              ))}
-            </div>
-          </div>
-        </div>
-      );
-      case 'apps': return (
-        <div className="px-6 space-y-6 pb-32">
-          <AnimatePresence>
-            {appToUninstall && (
-              <ConfirmationModal 
-                title="Uninstall App"
-                message={`Are you sure you want to uninstall ${appToUninstall.name}? This will remove all app data.`}
-                onConfirm={() => {
-                  setApps(prev => prev.filter(a => a.id !== appToUninstall.id));
-                  showToast(`${appToUninstall.name} Uninstalled`, 'info');
-                  setAppToUninstall(null);
-                }}
-                onCancel={() => setAppToUninstall(null)}
-              />
-            )}
-          </AnimatePresence>
-          <div className="relative">
-            <Search className="absolute left-4 top-1/2 -translate-y-1/2 text-white/20" size={18} />
-            <input 
-              type="text" 
-              placeholder="Search apps..."
-              className="w-full glass border border-white/5 rounded-2xl py-4 pl-12 pr-4 font-display text-sm focus:outline-none focus:border-neon-cyan/50 transition-all"
-            />
-          </div>
-          <div className="space-y-4">
-            <AnimatePresence mode="popLayout">
-              {apps.map((app, i) => (
-                <motion.div
-                  key={app.id}
-                  initial={{ opacity: 0, y: 10 }}
-                  animate={{ opacity: 1, y: 0 }}
-                  exit={{ opacity: 0, scale: 0.8, x: -100 }}
-                  transition={{ delay: i * 0.05 }}
-                >
-                  <Card className="flex items-center gap-4 p-4">
-                    <div className="w-14 h-14 flex items-center justify-center bg-white/5 rounded-2xl text-3xl">
-                      {app.icon}
-                    </div>
-                    <div className="flex-1">
-                      <p className="font-display font-bold text-white/90">{app.name}</p>
-                      <div className="flex items-center gap-2 text-[9px] text-white/30 uppercase tracking-widest font-bold">
-                        <span>{app.size}</span>
-                        <span className="text-neon-cyan">•</span>
-                        <span>{app.lastUsed}</span>
-                      </div>
-                    </div>
-                    <motion.button 
-                      whileHover={{ scale: 1.1, color: '#ff0055' }}
-                      whileTap={{ scale: 0.9 }}
-                      onClick={() => setAppToUninstall(app)}
-                      className="p-3 text-white/20 hover:bg-neon-red/10 rounded-xl transition-colors"
-                    >
-                      <Trash2 size={20} />
-                    </motion.button>
-                  </Card>
-                </motion.div>
-              ))}
-            </AnimatePresence>
-          </div>
-        </div>
-      );
-      case 'storage': return (
-        <div className="px-6 space-y-10 pb-32">
-          <div className="h-72 flex items-center justify-center relative">
-            <motion.div 
-              className="absolute w-64 h-64 rounded-full border border-white/5"
-              animate={{ scale: [1, 1.05, 1] }}
-              transition={{ duration: 4, repeat: Infinity }}
-            />
-            <ResponsiveContainer width="100%" height="100%">
-              <PieChart>
-                <Pie
-                  data={STORAGE_DATA}
-                  cx="50%"
-                  cy="50%"
-                  innerRadius={70}
-                  outerRadius={95}
-                  paddingAngle={8}
-                  dataKey="value"
-                  stroke="none"
-                >
-                  {STORAGE_DATA.map((entry, index) => (
-                    <Cell 
-                      key={`cell-${index}`} 
-                      fill={entry.color} 
-                      className="drop-shadow-[0_0_10px_rgba(255,255,255,0.1)]"
-                    />
-                  ))}
-                </Pie>
-              </PieChart>
-            </ResponsiveContainer>
-            <div className="absolute flex flex-col items-center">
-              <motion.span 
-                initial={{ opacity: 0, scale: 0.5 }}
-                animate={{ opacity: 1, scale: 1 }}
-                className="text-5xl font-display font-black text-white"
-              >
-                {storageInfo ? Math.round(((storageInfo.total - storageInfo.free) / storageInfo.total) * 100) : 52}%
-              </motion.span>
-              <span className="text-[10px] font-display text-white/30 uppercase tracking-[0.3em] font-bold">Used Space</span>
-            </div>
-          </div>
-          <div className="grid grid-cols-2 gap-4">
-            {STORAGE_DATA.map((item, i) => (
-              <motion.div
-                key={item.name}
-                initial={{ opacity: 0, y: 10 }}
-                animate={{ opacity: 1, y: 0 }}
-                transition={{ delay: i * 0.1 }}
-              >
-                <Card className="flex items-center gap-4 p-4">
-                  <div className="w-3 h-3 rounded-full shadow-[0_0_8px_currentColor]" style={{ backgroundColor: item.color, color: item.color }} />
-                  <div>
-                    <p className="text-xs font-display font-bold text-white/90">{item.name}</p>
-                    <p className="text-[9px] text-white/30 uppercase tracking-widest font-bold">{item.value}%</p>
-                  </div>
-                </Card>
-              </motion.div>
-            ))}
-          </div>
-          <Card className="p-6 space-y-4">
-            <div className="flex justify-between items-center">
-              <h3 className="text-[10px] font-display font-bold text-white/30 uppercase tracking-[0.2em]">Storage Health</h3>
-              <span className="text-xs font-display font-bold text-neon-green">Good</span>
-            </div>
-            <div className="w-full h-1.5 bg-white/5 rounded-full overflow-hidden">
-              <div className="h-full bg-neon-green w-[85%] rounded-full" />
-            </div>
-            <p className="text-[10px] text-white/20 uppercase font-display tracking-widest text-center">
-              {storageInfo ? `${storageInfo.total - storageInfo.free} GB / ${storageInfo.total} GB` : '64 GB / 128 GB'}
-            </p>
-          </Card>
-
-          <div className="space-y-4">
-            <h3 className="text-[10px] font-display font-bold text-white/30 uppercase tracking-[0.2em]">Large Files</h3>
-            <div className="space-y-3">
-              {[
-                { name: 'System Backup', size: '4.2 GB', date: '2024-03-15' },
-                { name: '4K Video Project', size: '2.8 GB', date: '2024-03-10' },
-                { name: 'Game Assets', size: '1.5 GB', date: '2024-03-08' },
-              ].map((file, i) => (
-                <Card key={i} className="flex items-center justify-between p-4">
-                  <div className="flex items-center gap-3">
-                    <div className="p-2 rounded-lg bg-white/5 text-neon-cyan">
-                      <HardDrive size={16} />
-                    </div>
-                    <div>
-                      <p className="text-xs font-display font-bold text-white/90">{file.name}</p>
-                      <p className="text-[8px] text-white/20 uppercase tracking-widest">{file.date}</p>
-                    </div>
-                  </div>
-                  <span className="text-xs font-display font-bold text-neon-cyan">{file.size}</span>
-                </Card>
-              ))}
-            </div>
-            <motion.button 
-              whileHover={{ scale: 1.02 }}
-              whileTap={{ scale: 0.98 }}
-              onClick={() => showToast('Large files analysis complete', 'info')}
-              className="w-full py-4 rounded-xl bg-white/5 border border-white/10 text-white/40 font-display font-bold text-[10px] uppercase tracking-widest"
-            >
-              Analyze All Files
-            </motion.button>
-          </div>
-        </div>
-      );
-      case 'battery': return (
-        <div className="px-6 space-y-8 pb-32">
-          <div className="flex flex-col items-center justify-center py-12 text-center">
-            <div className="relative w-48 h-48 mb-8 flex items-center justify-center">
-              <motion.div 
-                className="absolute inset-0 bg-neon-orange/5 rounded-full blur-3xl"
-                animate={{ scale: [1, 1.2, 1], opacity: [0.3, 0.5, 0.3] }}
-                transition={{ duration: 4, repeat: Infinity }}
-              />
-              <div className="relative z-10 flex flex-col items-center">
-                <Battery size={80} className="text-neon-orange mb-4 drop-shadow-[0_0_20px_rgba(255,165,0,0.4)]" />
-                <motion.span 
-                  initial={{ opacity: 0 }}
-                  animate={{ opacity: 1 }}
-                  className="text-5xl font-display font-black text-white"
-                >
-                  {battery ? battery.level : 78}%
-                </motion.span>
-              </div>
-              <svg className="absolute inset-0 w-full h-full -rotate-90">
-                <circle
-                  cx="50%"
-                  cy="50%"
-                  r="90"
-                  className="stroke-white/5 fill-none"
-                  strokeWidth="4"
-                />
-                <motion.circle
-                  cx="50%"
-                  cy="50%"
-                  r="90"
-                  className="stroke-neon-orange fill-none"
-                  strokeWidth="4"
-                  strokeLinecap="round"
-                  initial={{ strokeDasharray: "0 565" }}
-                  animate={{ strokeDasharray: `${((battery ? battery.level : 78) / 100) * 565} 565` }}
-                  transition={{ duration: 2, ease: "easeOut" }}
-                />
-              </svg>
-            </div>
-            <h2 className="text-2xl font-display font-black text-white mb-1">Battery Health: Good</h2>
-            <div className="flex items-center gap-4 mt-1">
-              <p className="text-white/30 uppercase tracking-[0.3em] text-[10px] font-bold">Estimated: 14h 20m left</p>
-              <div className="flex items-center gap-1 text-neon-orange">
-                <Thermometer size={10} />
-                <span className="text-[10px] font-bold">32°C</span>
-              </div>
-            </div>
-          </div>
-
-          <div className="grid grid-cols-2 gap-4">
-            <Card className="p-4 text-center">
-              <p className="text-[9px] text-white/30 uppercase tracking-widest font-bold mb-1">Health</p>
-              <p className="text-sm font-display font-bold text-neon-green">98%</p>
-            </Card>
-            <Card className="p-4 text-center">
-              <p className="text-[9px] text-white/30 uppercase tracking-widest font-bold mb-1">Cycles</p>
-              <p className="text-sm font-display font-bold text-white">142</p>
-            </Card>
-          </div>
-
-          <div className="grid grid-cols-1 gap-4">
-            {[
-              { id: 'save', label: 'Power Saving Mode', desc: 'Extend battery life by 2 hours', active: true },
-              { id: 'ultra', label: 'Ultra Power Saving', desc: 'Only essential apps', active: false },
-              { id: 'adaptive', label: 'Adaptive Battery', desc: 'Limit background apps', active: true },
-            ].map((mode, i) => (
-              <motion.div
-                key={mode.label}
-                initial={{ opacity: 0, x: -20 }}
-                animate={{ opacity: 1, x: 0 }}
-                transition={{ delay: i * 0.1 }}
-              >
-                <Card className="flex items-center justify-between p-5" onClick={() => showToast(`${mode.label} ${!mode.active ? 'Enabled' : 'Disabled'}`, 'info')}>
-                  <div>
-                    <p className="text-sm font-display font-bold text-white/90">{mode.label}</p>
-                    <p className="text-[9px] text-white/30 uppercase tracking-widest font-bold">{mode.desc}</p>
-                  </div>
-                  <div className={cn(
-                    "w-12 h-6 rounded-full relative p-1 border transition-colors",
-                    mode.active ? "bg-neon-orange/20 border-neon-orange/40" : "bg-white/5 border-white/10"
-                  )}>
-                    <motion.div 
-                      className={cn(
-                        "w-4 h-4 rounded-full shadow-lg",
-                        mode.active ? "bg-neon-orange shadow-neon-orange/50" : "bg-white/20"
-                      )}
-                      animate={{ x: mode.active ? 20 : 0 }}
-                    />
-                  </div>
-                </Card>
-              </motion.div>
-            ))}
-          </div>
-        </div>
-      );
-      case 'cooler': return <CPUCooler showToast={showToast} />;
-      default: return <Dashboard onNavigate={navigateTo} battery={battery} deviceInfo={deviceInfo} showToast={showToast} />;
-    }
-  };
-
-  const getTitle = () => {
-    switch (activeTab) {
-      case 'dashboard': return 'Ultra Optimize X';
-      case 'cleaner': return 'Junk Cleaner';
-      case 'booster': return 'RAM Booster';
-      case 'apps': return 'App Manager';
-      case 'storage': return 'Storage Analyzer';
-      case 'battery': return 'Battery Saver';
-      case 'cooler': return 'CPU Cooler';
-      case 'network': return 'Network Speed';
-      case 'security': return 'Security Center';
-      case 'settings': return 'Settings';
-      case 'game': return 'Game Booster';
-      default: return 'Ultra Optimize X';
-    }
-  };
+      <div className="text-center pt-6">
+        <p className="text-[10px] uppercase tracking-[0.3em] text-white/20 font-bold">Ultra Optimize X v2.0.4</p>
+        <p className="text-[8px] uppercase tracking-[0.2em] text-white/10 mt-2">Designed for Pro Gamers</p>
+      </div>
+    </div>
+  );
 
   return (
-    <div className="min-h-screen bg-bg-deep pb-24 max-w-md mx-auto relative overflow-x-hidden">
-      <Header 
-        title={getTitle()} 
-        onBack={activeTab !== 'dashboard' ? goBack : undefined} 
-      />
+    <div className="min-h-screen bg-bg-deep text-white font-sans relative">
+      {showConfetti && <Confetti width={width} height={height} recycle={false} numberOfPieces={200} colors={['#00f5ff', '#bf00ff', '#00ff88']} />}
       
-      <motion.div
-        key={activeTab}
-        initial={{ opacity: 0, x: 20 }}
-        animate={{ opacity: 1, x: 0 }}
-        exit={{ opacity: 0, x: -20 }}
-        transition={{ duration: 0.2 }}
-      >
-        {renderContent()}
-      </motion.div>
+      {/* Background Effects */}
+      <div className="fixed inset-0 pointer-events-none overflow-hidden">
+        <div className="absolute top-[-10%] left-[-10%] w-[40%] h-[40%] bg-neon-cyan/5 blur-[120px] rounded-full" />
+        <div className="absolute bottom-[-10%] right-[-10%] w-[40%] h-[40%] bg-neon-purple/5 blur-[120px] rounded-full" />
+      </div>
 
-      <BottomNav activeTab={activeTab} onNavigate={navigateTo} />
+      <Header 
+        title={activeTab === 'dashboard' ? 'Ultra Optimize X' : activeTab.toUpperCase()} 
+        onBack={activeTab !== 'dashboard' ? () => setActiveTab('dashboard') : undefined}
+        rightElement={
+          <button className="p-2 rounded-xl bg-white/5 relative">
+            <Bell size={20} className="text-white/60" />
+            <div className="absolute top-2 right-2 w-2 h-2 bg-neon-red rounded-full neon-glow-red" />
+          </button>
+        }
+      />
 
-      <AnimatePresence>
-        {toast && (
-          <Toast 
-            message={toast.message} 
-            type={toast.type} 
-            onClose={() => setToast(null)} 
-          />
-        )}
-      </AnimatePresence>
+      <main className="max-w-md mx-auto relative z-10">
+        <AnimatePresence mode="wait">
+          <motion.div
+            key={activeTab}
+            initial={{ opacity: 0, y: 20 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0, y: -20 }}
+            transition={{ duration: 0.3 }}
+          >
+            {activeTab === 'dashboard' && renderDashboard()}
+            {activeTab === 'gfx' && renderGFX()}
+            {activeTab === 'sensitivity' && renderSensitivity()}
+            {activeTab === 'crosshair' && renderCrosshair()}
+            {activeTab === 'network' && renderNetwork()}
+            {activeTab === 'apps' && renderApps()}
+            {activeTab === 'settings' && renderSettings()}
+            {['cleaner', 'battery', 'cooler'].includes(activeTab) && (
+              <div className="flex flex-col items-center justify-center h-[70vh] p-6 text-center space-y-6">
+                <div className="relative">
+                  <div className="absolute inset-0 bg-neon-cyan/20 blur-3xl animate-pulse" />
+                  <div className="w-48 h-48 rounded-full border-2 border-white/5 flex items-center justify-center relative">
+                    <motion.div 
+                      animate={{ rotate: 360 }}
+                      transition={{ duration: 10, repeat: Infinity, ease: "linear" }}
+                      className="absolute inset-0 rounded-full border-t-2 border-neon-cyan"
+                    />
+                    {activeTab === 'cleaner' && <Trash2 size={64} className="text-neon-cyan" />}
+                    {activeTab === 'battery' && <Battery size={64} className="text-neon-green" />}
+                    {activeTab === 'cooler' && <Thermometer size={64} className="text-neon-cyan" />}
+                  </div>
+                </div>
+                <div className="space-y-2">
+                  <h2 className="text-2xl font-display font-bold uppercase tracking-widest">
+                    {activeTab === 'cleaner' ? 'Cleaning Junk...' : activeTab === 'battery' ? 'Saving Power...' : 'Cooling Down...'}
+                  </h2>
+                  <p className="text-sm text-white/40">Optimizing system resources for peak performance</p>
+                </div>
+                <motion.button 
+                  whileHover={{ scale: 1.05 }}
+                  whileTap={{ scale: 0.95 }}
+                  onClick={handleOptimize}
+                  className="px-12 py-4 rounded-2xl bg-white/5 border border-white/10 font-bold uppercase tracking-widest text-xs"
+                >
+                  Start Scan
+                </motion.button>
+              </div>
+            )}
+          </motion.div>
+        </AnimatePresence>
+      </main>
+
+      {/* Navigation Bar */}
+      <nav className="fixed bottom-0 left-0 right-0 p-4 pb-8 bg-gradient-to-t from-bg-deep via-bg-deep/95 to-transparent z-50">
+        <div className="max-w-md mx-auto glass rounded-3xl p-2 flex justify-between items-center">
+          <NavButton icon={LayoutGrid} active={activeTab === 'dashboard'} onClick={() => setActiveTab('dashboard')} />
+          <NavButton icon={Gamepad2} active={activeTab === 'apps'} onClick={() => setActiveTab('apps')} />
+          <div className="relative -top-6">
+            <motion.button 
+              whileHover={{ scale: 1.1 }}
+              whileTap={{ scale: 0.9 }}
+              onClick={handleOptimize}
+              className="w-14 h-14 rounded-2xl bg-neon-cyan text-bg-deep flex items-center justify-center neon-glow-cyan shadow-2xl"
+            >
+              <Zap size={28} fill="currentColor" />
+            </motion.button>
+          </div>
+          <NavButton icon={Activity} active={activeTab === 'network'} onClick={() => setActiveTab('network')} />
+          <NavButton icon={Settings} active={activeTab === 'settings'} onClick={() => setActiveTab('settings')} />
+        </div>
+      </nav>
     </div>
   );
 }
+
+const NavButton = ({ icon: Icon, active, onClick }: { icon: any; active: boolean; onClick: () => void }) => (
+  <button 
+    onClick={onClick}
+    className={cn(
+      "p-3 rounded-2xl transition-all duration-300 relative group",
+      active ? "text-neon-cyan" : "text-white/20 hover:text-white/40"
+    )}
+  >
+    <Icon size={24} />
+    {active && (
+      <motion.div 
+        layoutId="nav-glow"
+        className="absolute inset-0 bg-neon-cyan/10 blur-xl rounded-full"
+      />
+    )}
+  </button>
+);
