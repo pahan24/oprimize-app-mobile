@@ -19,17 +19,14 @@ workflows:
         script: |
           npx cap sync android
           cd android
-          # Delete potentially corrupt wrapper files
-          rm -f gradle/wrapper/gradle-wrapper.jar
-          # Regenerate gradle wrapper using system gradle
+          # Fix for corrupt gradle-wrapper.jar
           gradle wrapper --gradle-version 8.14.3
           chmod +x gradlew
       - name: Build Android APK & AAB
         script: |
           cd android
-          # Use system gradle directly to avoid wrapper issues
-          gradle assembleRelease # Build APK
-          gradle bundleRelease   # Build AAB (App Bundle)
+          ./gradlew assembleRelease # Build APK
+          ./gradlew bundleRelease   # Build AAB (App Bundle)
     artifacts:
       - android/app/build/outputs/apk/release/*.apk
       - android/app/build/outputs/bundle/release/*.aab
