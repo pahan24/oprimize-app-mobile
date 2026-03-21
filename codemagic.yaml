@@ -19,8 +19,10 @@ workflows:
         script: |
           npx cap sync android
           cd android
-          # Regenerate gradle wrapper if it's corrupt
-          gradle wrapper
+          # Delete potentially corrupt wrapper files
+          rm -f gradle/wrapper/gradle-wrapper.jar
+          # Regenerate gradle wrapper using system gradle
+          gradle wrapper --gradle-version 8.14.3
           chmod +x gradlew
       - name: Build Android APK & AAB
         script: |
