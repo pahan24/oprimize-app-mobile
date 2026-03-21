@@ -15,13 +15,16 @@ workflows:
       - name: Build web assets
         script: |
           npm run build
-      - name: Capacitor Sync
+      - name: Capacitor Sync & Fix Gradle Wrapper
         script: |
           npx cap sync android
+          cd android
+          # Regenerate gradle wrapper if it's corrupt
+          gradle wrapper
+          chmod +x gradlew
       - name: Build Android APK & AAB
         script: |
           cd android
-          chmod +x gradlew
           ./gradlew assembleRelease # Build APK
           ./gradlew bundleRelease   # Build AAB (App Bundle)
     artifacts:
