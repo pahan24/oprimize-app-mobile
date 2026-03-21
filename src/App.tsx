@@ -153,13 +153,17 @@ const Dashboard = ({ onNavigate, battery }: { onNavigate: (tab: Tab) => void; ba
 
   useEffect(() => {
     const updateMemory = () => {
-      if ((performance as any).memory) {
-        const mem = (performance as any).memory;
-        setMemory({
-          used: Math.round(mem.usedJSHeapSize / (1024 * 1024)),
-          total: Math.round(mem.jsHeapSizeLimit / (1024 * 1024))
-        });
-      } else {
+      try {
+        if (window.performance && (window.performance as any).memory) {
+          const mem = (window.performance as any).memory;
+          setMemory({
+            used: Math.round(mem.usedJSHeapSize / (1024 * 1024)),
+            total: Math.round(mem.jsHeapSizeLimit / (1024 * 1024))
+          });
+        } else {
+          setMemory({ used: 420, total: 2048 });
+        }
+      } catch (e) {
         setMemory({ used: 420, total: 2048 });
       }
     };
@@ -396,12 +400,16 @@ const RAMBooster = () => {
 
   useEffect(() => {
     const updateMemory = () => {
-      if ((performance as any).memory) {
-        const mem = (performance as any).memory;
-        setMemory({
-          used: Math.round(mem.usedJSHeapSize / (1024 * 1024)),
-          total: Math.round(mem.jsHeapSizeLimit / (1024 * 1024))
-        });
+      try {
+        if (window.performance && (window.performance as any).memory) {
+          const mem = (window.performance as any).memory;
+          setMemory({
+            used: Math.round(mem.usedJSHeapSize / (1024 * 1024)),
+            total: Math.round(mem.jsHeapSizeLimit / (1024 * 1024))
+          });
+        }
+      } catch (e) {
+        // Silently fail and keep previous state
       }
     };
     updateMemory();
@@ -688,21 +696,29 @@ export default function App() {
 
   useEffect(() => {
     // Real Battery Data
-    if ('getBattery' in navigator) {
-      (navigator as any).getBattery().then((batt: any) => {
-        const updateBattery = () => {
-          setBattery({
-            level: Math.round(batt.level * 100),
-            charging: batt.charging,
-            chargingTime: batt.chargingTime,
-            dischargingTime: batt.dischargingTime
-          });
-        };
-        updateBattery();
-        batt.addEventListener('levelchange', updateBattery);
-        batt.addEventListener('chargingchange', updateBattery);
-      });
-    }
+    const initBattery = async () => {
+      try {
+        if ('getBattery' in navigator) {
+          const batt = await (navigator as any).getBattery();
+          const updateBattery = () => {
+            setBattery({
+              level: Math.round(batt.level * 100),
+              charging: batt.charging,
+              chargingTime: batt.chargingTime,
+              dischargingTime: batt.dischargingTime
+            });
+          };
+          updateBattery();
+          batt.addEventListener('levelchange', updateBattery);
+          batt.addEventListener('chargingchange', updateBattery);
+        }
+      } catch (e) {
+        console.warn("Battery API blocked or unavailable:", e);
+        // Fallback to mock data if needed, but state already has default logic
+      }
+    };
+    
+    initBattery();
 
     const timer = setTimeout(() => setIsSplash(false), 2500);
     return () => clearTimeout(timer);
