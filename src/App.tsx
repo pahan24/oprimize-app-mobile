@@ -562,6 +562,14 @@ const NetworkSpeed = ({ networkStatus, showToast }: { networkStatus: any; showTo
   const [isTesting, setIsTesting] = useState(false);
   const [speed, setSpeed] = useState<number | null>(null);
   const [ping, setPing] = useState<number | null>(null);
+  const [signal, setSignal] = useState(85);
+
+  useEffect(() => {
+    const interval = setInterval(() => {
+      setSignal(prev => Math.max(70, Math.min(100, prev + (Math.random() * 4 - 2))));
+    }, 3000);
+    return () => clearInterval(interval);
+  }, []);
 
   const startTest = () => {
     setIsTesting(true);
@@ -602,7 +610,7 @@ const NetworkSpeed = ({ networkStatus, showToast }: { networkStatus: any; showTo
           </div>
         </div>
 
-        <div className="grid grid-cols-2 w-full gap-4">
+        <div className="grid grid-cols-3 w-full gap-4">
           <Card className="text-center p-4">
             <p className="text-[9px] font-display text-white/30 uppercase tracking-widest mb-1 font-bold">Ping</p>
             <p className="text-xl font-display font-bold text-neon-purple">{ping ? `${ping} ms` : '--'}</p>
@@ -610,6 +618,10 @@ const NetworkSpeed = ({ networkStatus, showToast }: { networkStatus: any; showTo
           <Card className="text-center p-4">
             <p className="text-[9px] font-display text-white/30 uppercase tracking-widest mb-1 font-bold">Jitter</p>
             <p className="text-xl font-display font-bold text-neon-purple">{ping ? `${Math.floor(ping/4)} ms` : '--'}</p>
+          </Card>
+          <Card className="text-center p-4">
+            <p className="text-[9px] font-display text-white/30 uppercase tracking-widest mb-1 font-bold">Signal</p>
+            <p className="text-xl font-display font-bold text-neon-purple">{Math.round(signal)}%</p>
           </Card>
         </div>
       </div>
@@ -643,18 +655,85 @@ const NetworkSpeed = ({ networkStatus, showToast }: { networkStatus: any; showTo
   );
 };
 
+const ConfirmationModal = ({ title, message, onConfirm, onCancel }: { title: string; message: string; onConfirm: () => void; onCancel: () => void }) => (
+  <motion.div 
+    initial={{ opacity: 0 }}
+    animate={{ opacity: 1 }}
+    exit={{ opacity: 0 }}
+    className="fixed inset-0 z-[110] bg-bg-deep/80 backdrop-blur-md flex items-center justify-center p-6"
+  >
+    <motion.div 
+      initial={{ scale: 0.9, y: 20 }}
+      animate={{ scale: 1, y: 0 }}
+      exit={{ scale: 0.9, y: 20 }}
+      className="glass p-8 rounded-3xl border border-white/10 max-w-sm w-full space-y-6"
+    >
+      <div className="flex flex-col items-center text-center space-y-4">
+        <div className="p-4 rounded-2xl bg-neon-red/10 text-neon-red">
+          <AlertTriangle size={32} />
+        </div>
+        <h3 className="text-xl font-display font-black text-white uppercase tracking-tight">{title}</h3>
+        <p className="text-sm text-white/40 font-display leading-relaxed">{message}</p>
+      </div>
+      <div className="grid grid-cols-2 gap-4">
+        <button 
+          onClick={onCancel}
+          className="py-4 rounded-2xl bg-white/5 text-white/60 font-display font-bold text-xs uppercase tracking-widest hover:bg-white/10 transition-colors"
+        >
+          Cancel
+        </button>
+        <button 
+          onClick={onConfirm}
+          className="py-4 rounded-2xl bg-neon-red text-white font-display font-bold text-xs uppercase tracking-widest shadow-[0_0_20px_rgba(255,0,85,0.3)]"
+        >
+          Uninstall
+        </button>
+      </div>
+    </motion.div>
+  </motion.div>
+);
+
 const SecurityScan = ({ showToast }: { showToast: (m: string, t?: any) => void }) => {
   const [isScanning, setIsScanning] = useState(false);
   const [status, setStatus] = useState<'idle' | 'scanning' | 'safe'>('idle');
+  const [scanProgress, setScanProgress] = useState(0);
+  const [scanLog, setScanLog] = useState<string[]>([]);
 
-  const handleScan = () => {
+  const handleScan = (deep = false) => {
     setIsScanning(true);
     setStatus('scanning');
-    setTimeout(() => {
-      setIsScanning(false);
-      setStatus('safe');
-      showToast('Security Scan Complete: Device Safe', 'success');
-    }, 4000);
+    setScanProgress(0);
+    setScanLog([]);
+    
+    const logs = deep ? [
+      'Initializing deep core scan...',
+      'Checking system integrity...',
+      'Scanning for rootkits...',
+      'Verifying app signatures...',
+      'Analyzing network protocols...',
+      'Checking for data leaks...',
+      'Verifying kernel security...',
+      'Finalizing security report...'
+    ] : [
+      'Quick scanning apps...',
+      'Checking permissions...',
+      'Scanning cache files...',
+      'Verifying system status...'
+    ];
+
+    let i = 0;
+    const interval = setInterval(() => {
+      if (i < logs.length) {
+        setScanLog(prev => [logs[i], ...prev].slice(0, 4));
+        setScanProgress(((i + 1) / logs.length) * 100);
+        i++;
+      } else {
+        clearInterval(interval);
+        setIsScanning(false);
+        setStatus('safe');
+        showToast(deep ? 'Deep Security Scan Complete' : 'Quick Scan Complete', 'success');
+      }
+    }, deep ? 800 : 600);
   };
 
   return (
@@ -704,22 +783,47 @@ const SecurityScan = ({ showToast }: { showToast: (m: string, t?: any) => void }
         </div>
 
         <h2 className="text-3xl font-display font-black mb-2 text-white">
-          {status === 'scanning' ? "Scanning..." : status === 'safe' ? "Device Secure" : "Security Check"}
+          {status === 'scanning' ? `${Math.round(scanProgress)}%` : status === 'safe' ? "Device Secure" : "Security Check"}
         </h2>
-        <p className="text-white/30 text-xs font-display uppercase tracking-widest max-w-[240px]">
+        {status === 'scanning' && (
+          <div className="w-full max-w-[200px] space-y-2 mt-4">
+            {scanLog.map((log, i) => (
+              <motion.p 
+                key={i}
+                initial={{ opacity: 0, x: -10 }}
+                animate={{ opacity: 1, x: 0 }}
+                className="text-[8px] text-neon-green font-mono uppercase tracking-widest opacity-60 truncate"
+              >
+                {log}
+              </motion.p>
+            ))}
+          </div>
+        )}
+        <p className="text-white/30 text-xs font-display uppercase tracking-widest max-w-[240px] mt-2">
           {status === 'safe' ? "No threats detected" : "Protect your device from malware"}
         </p>
       </div>
 
-      <motion.button 
-        whileHover={{ scale: 1.02 }}
-        whileTap={{ scale: 0.98 }}
-        onClick={handleScan}
-        disabled={isScanning}
-        className="w-full py-5 rounded-2xl bg-neon-green text-bg-deep font-display font-bold text-lg tracking-[0.2em] uppercase neon-glow-green"
-      >
-        {isScanning ? "Scanning..." : "Start Security Scan"}
-      </motion.button>
+      <div className="flex gap-4">
+        <motion.button 
+          whileHover={{ scale: 1.02 }}
+          whileTap={{ scale: 0.98 }}
+          onClick={() => handleScan(false)}
+          disabled={isScanning}
+          className="flex-1 py-5 rounded-2xl bg-white/5 border border-neon-green/20 text-neon-green font-display font-bold text-xs tracking-[0.2em] uppercase"
+        >
+          Quick Scan
+        </motion.button>
+        <motion.button 
+          whileHover={{ scale: 1.02 }}
+          whileTap={{ scale: 0.98 }}
+          onClick={() => handleScan(true)}
+          disabled={isScanning}
+          className="flex-1 py-5 rounded-2xl bg-neon-green text-bg-deep font-display font-bold text-xs tracking-[0.2em] uppercase neon-glow-green"
+        >
+          Deep Scan
+        </motion.button>
+      </div>
 
       <div className="space-y-3">
         {[
@@ -963,7 +1067,16 @@ export default function App() {
   const [storageInfo, setStorageInfo] = useState<{ free: number; total: number } | null>(null);
   const [apps, setApps] = useState(MOCK_APPS);
   const [isLaunchingGame, setIsLaunchingGame] = useState<string | null>(null);
+  const [appToUninstall, setAppToUninstall] = useState<AppInfo | null>(null);
   const [toast, setToast] = useState<{ message: string; type: 'success' | 'info' | 'error' } | null>(null);
+  const [fps, setFps] = useState(60);
+
+  useEffect(() => {
+    const interval = setInterval(() => {
+      setFps(prev => Math.max(55, Math.min(62, prev + (Math.random() * 2 - 1))));
+    }, 1000);
+    return () => clearInterval(interval);
+  }, []);
 
   const showToast = (message: string, type: 'success' | 'info' | 'error' = 'info') => {
     setToast({ message, type });
@@ -1156,7 +1269,10 @@ export default function App() {
               <Play size={80} className="text-neon-green relative z-10 drop-shadow-[0_0_20px_rgba(0,255,136,0.5)]" />
             </div>
             <h2 className="text-3xl font-display font-black mb-1 text-white">Game Booster</h2>
-            <p className="text-white/30 uppercase tracking-[0.3em] text-[10px] font-bold">Max Performance Mode</p>
+            <div className="flex items-center gap-2">
+              <p className="text-white/30 uppercase tracking-[0.3em] text-[10px] font-bold">Max Performance Mode</p>
+              <span className="text-neon-green text-[10px] font-mono font-bold animate-pulse">{Math.round(fps)} FPS</span>
+            </div>
           </div>
 
           <Card className="flex items-center justify-between p-5">
@@ -1211,6 +1327,20 @@ export default function App() {
       );
       case 'apps': return (
         <div className="px-6 space-y-6 pb-32">
+          <AnimatePresence>
+            {appToUninstall && (
+              <ConfirmationModal 
+                title="Uninstall App"
+                message={`Are you sure you want to uninstall ${appToUninstall.name}? This will remove all app data.`}
+                onConfirm={() => {
+                  setApps(prev => prev.filter(a => a.id !== appToUninstall.id));
+                  showToast(`${appToUninstall.name} Uninstalled`, 'info');
+                  setAppToUninstall(null);
+                }}
+                onCancel={() => setAppToUninstall(null)}
+              />
+            )}
+          </AnimatePresence>
           <div className="relative">
             <Search className="absolute left-4 top-1/2 -translate-y-1/2 text-white/20" size={18} />
             <input 
@@ -1244,10 +1374,7 @@ export default function App() {
                     <motion.button 
                       whileHover={{ scale: 1.1, color: '#ff0055' }}
                       whileTap={{ scale: 0.9 }}
-                      onClick={() => {
-                        setApps(prev => prev.filter(a => a.id !== app.id));
-                        showToast(`${app.name} Uninstalled`, 'info');
-                      }}
+                      onClick={() => setAppToUninstall(app)}
                       className="p-3 text-white/20 hover:bg-neon-red/10 rounded-xl transition-colors"
                     >
                       <Trash2 size={20} />
@@ -1330,6 +1457,38 @@ export default function App() {
               {storageInfo ? `${storageInfo.total - storageInfo.free} GB / ${storageInfo.total} GB` : '64 GB / 128 GB'}
             </p>
           </Card>
+
+          <div className="space-y-4">
+            <h3 className="text-[10px] font-display font-bold text-white/30 uppercase tracking-[0.2em]">Large Files</h3>
+            <div className="space-y-3">
+              {[
+                { name: 'System Backup', size: '4.2 GB', date: '2024-03-15' },
+                { name: '4K Video Project', size: '2.8 GB', date: '2024-03-10' },
+                { name: 'Game Assets', size: '1.5 GB', date: '2024-03-08' },
+              ].map((file, i) => (
+                <Card key={i} className="flex items-center justify-between p-4">
+                  <div className="flex items-center gap-3">
+                    <div className="p-2 rounded-lg bg-white/5 text-neon-cyan">
+                      <HardDrive size={16} />
+                    </div>
+                    <div>
+                      <p className="text-xs font-display font-bold text-white/90">{file.name}</p>
+                      <p className="text-[8px] text-white/20 uppercase tracking-widest">{file.date}</p>
+                    </div>
+                  </div>
+                  <span className="text-xs font-display font-bold text-neon-cyan">{file.size}</span>
+                </Card>
+              ))}
+            </div>
+            <motion.button 
+              whileHover={{ scale: 1.02 }}
+              whileTap={{ scale: 0.98 }}
+              onClick={() => showToast('Large files analysis complete', 'info')}
+              className="w-full py-4 rounded-xl bg-white/5 border border-white/10 text-white/40 font-display font-bold text-[10px] uppercase tracking-widest"
+            >
+              Analyze All Files
+            </motion.button>
+          </div>
         </div>
       );
       case 'battery': return (
@@ -1373,7 +1532,24 @@ export default function App() {
               </svg>
             </div>
             <h2 className="text-2xl font-display font-black text-white mb-1">Battery Health: Good</h2>
-            <p className="text-white/30 uppercase tracking-[0.3em] text-[10px] font-bold">Estimated: 14h 20m left</p>
+            <div className="flex items-center gap-4 mt-1">
+              <p className="text-white/30 uppercase tracking-[0.3em] text-[10px] font-bold">Estimated: 14h 20m left</p>
+              <div className="flex items-center gap-1 text-neon-orange">
+                <Thermometer size={10} />
+                <span className="text-[10px] font-bold">32°C</span>
+              </div>
+            </div>
+          </div>
+
+          <div className="grid grid-cols-2 gap-4">
+            <Card className="p-4 text-center">
+              <p className="text-[9px] text-white/30 uppercase tracking-widest font-bold mb-1">Health</p>
+              <p className="text-sm font-display font-bold text-neon-green">98%</p>
+            </Card>
+            <Card className="p-4 text-center">
+              <p className="text-[9px] text-white/30 uppercase tracking-widest font-bold mb-1">Cycles</p>
+              <p className="text-sm font-display font-bold text-white">142</p>
+            </Card>
           </div>
 
           <div className="grid grid-cols-1 gap-4">
