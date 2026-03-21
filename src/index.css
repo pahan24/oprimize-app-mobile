@@ -1,0 +1,42 @@
+@import url('https://fonts.googleapis.com/css2?family=Orbitron:wght@400;500;600;700;800;900&family=Rajdhani:wght@300;400;500;600;700&display=swap');
+@import "tailwindcss";
+
+@theme {
+  --font-display: "Orbitron", sans-serif;
+  --font-sans: "Rajdhani", sans-serif;
+  
+  --color-neon-cyan: #00f5ff;
+  --color-neon-purple: #bf00ff;
+  --color-neon-green: #00ff88;
+  --color-neon-orange: #ff6b00;
+  --color-bg-deep: #050508;
+  --color-bg-card: #0d0d14;
+}
+
+@layer base {
+  body {
+    @apply bg-bg-deep text-white font-sans selection:bg-neon-cyan/30;
+    -webkit-tap-highlight-color: transparent;
+  }
+}
+
+.neon-glow-cyan {
+  box-shadow: 0 0 15px rgba(0, 245, 255, 0.4);
+}
+
+.neon-glow-purple {
+  box-shadow: 0 0 15px rgba(191, 0, 255, 0.4);
+}
+
+.neon-glow-green {
+  box-shadow: 0 0 15px rgba(0, 255, 136, 0.4);
+}
+
+.hide-scrollbar::-webkit-scrollbar {
+  display: none;
+}
+
+.hide-scrollbar {
+  -ms-overflow-style: none;
+  scrollbar-width: none;
+}
