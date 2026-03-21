@@ -20,6 +20,7 @@ workflows:
           npx cap sync android
           cd android
           # Fix for corrupt gradle-wrapper.jar
+          rm -f gradle/wrapper/gradle-wrapper.jar
           gradle wrapper --gradle-version 8.14.3
           chmod +x gradlew
       - name: Build Android APK & AAB
