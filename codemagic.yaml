@@ -27,8 +27,9 @@ workflows:
       - name: Build Android APK & AAB
         script: |
           cd android
-          ./gradlew assembleRelease # Build APK
-          ./gradlew bundleRelease   # Build AAB (App Bundle)
+          # Use system gradle directly to avoid wrapper issues
+          gradle assembleRelease # Build APK
+          gradle bundleRelease   # Build AAB (App Bundle)
     artifacts:
       - android/app/build/outputs/apk/release/*.apk
       - android/app/build/outputs/bundle/release/*.aab
