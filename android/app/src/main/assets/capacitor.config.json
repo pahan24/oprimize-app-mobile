@@ -1,0 +1,8 @@
+{
+	"appId": "com.ultraoptimizex.app",
+	"appName": "Ultra Optimize X",
+	"webDir": "dist",
+	"server": {
+		"androidScheme": "https"
+	}
+}
