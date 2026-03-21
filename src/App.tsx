@@ -3,7 +3,7 @@ import {
   Zap, 
   Trash2, 
   Cpu, 
-  Battery as BatteryIcon, 
+  Battery, 
   HardDrive, 
   ShieldCheck, 
   Settings, 
@@ -25,7 +25,8 @@ import {
   Info,
   AlertTriangle,
   Play,
-  Signal
+  Signal,
+  Layers
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { PieChart, Pie, Cell, ResponsiveContainer, AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip } from 'recharts';
@@ -72,27 +73,45 @@ const STORAGE_DATA = [
 // --- Components ---
 
 const Card = ({ children, className, onClick }: { children: React.ReactNode; className?: string; onClick?: () => void; key?: string | number }) => (
-  <div 
+  <motion.div 
+    whileHover={{ scale: 1.02 }}
+    whileTap={{ scale: 0.98 }}
     onClick={onClick}
-    className={cn("bg-bg-card border border-white/5 rounded-2xl p-4 active:scale-95 transition-transform cursor-pointer", className)}
+    className={cn("glass rounded-2xl p-4 transition-all duration-300", className)}
   >
     {children}
-  </div>
+  </motion.div>
 );
 
 const Header = ({ title, onBack }: { title: string; onBack?: () => void }) => (
-  <div className="flex items-center gap-4 p-6 sticky top-0 bg-bg-deep/80 backdrop-blur-md z-50">
+  <div className="flex items-center gap-4 p-6 sticky top-0 bg-bg-deep/40 backdrop-blur-xl z-50 border-b border-white/5">
     {onBack && (
-      <button onClick={onBack} className="p-2 rounded-full bg-white/5 active:bg-white/10">
+      <motion.button 
+        whileHover={{ scale: 1.1 }}
+        whileTap={{ scale: 0.9 }}
+        onClick={onBack} 
+        className="p-2 rounded-full bg-white/5 hover:bg-white/10 transition-colors"
+      >
         <ArrowLeft size={20} />
-      </button>
+      </motion.button>
     )}
-    <h1 className="text-xl font-display font-bold tracking-tight text-neon-cyan uppercase">{title}</h1>
-    {!onBack && <div className="ml-auto p-2 rounded-full bg-white/5"><Settings size={20} /></div>}
+    <h1 className="text-lg font-display font-bold tracking-tight text-white uppercase flex-1">
+      {title.split(' ').map((word, i) => (
+        <span key={i} className={cn(i === 1 && "text-neon-cyan")}>{word} </span>
+      ))}
+    </h1>
+    {!onBack && (
+      <motion.div 
+        whileHover={{ rotate: 90 }}
+        className="p-2 rounded-full bg-white/5 cursor-pointer"
+      >
+        <Settings size={20} />
+      </motion.div>
+    )}
   </div>
 );
 
-const BottomNav = ({ activeTab, setActiveTab }: { activeTab: Tab; setActiveTab: (tab: Tab) => void }) => {
+const BottomNav = ({ activeTab, onNavigate }: { activeTab: Tab; onNavigate: (tab: Tab) => void }) => {
   const navItems = [
     { id: 'dashboard', icon: LayoutGrid, label: 'Home' },
     { id: 'cleaner', icon: Trash2, label: 'Clean' },
@@ -101,18 +120,24 @@ const BottomNav = ({ activeTab, setActiveTab }: { activeTab: Tab; setActiveTab: 
   ];
 
   return (
-    <div className="fixed bottom-0 left-0 right-0 bg-bg-card border-t border-white/5 px-6 py-3 flex justify-between items-center z-50">
+    <div className="fixed bottom-6 left-6 right-6 glass rounded-2xl px-6 py-3 flex justify-between items-center z-50 shadow-2xl">
       {navItems.map((item) => (
         <button
           key={item.id}
-          onClick={() => setActiveTab(item.id as Tab)}
+          onClick={() => onNavigate(item.id as Tab)}
           className={cn(
-            "flex flex-col items-center gap-1 transition-colors",
-            activeTab === item.id ? "text-neon-cyan" : "text-white/40"
+            "flex flex-col items-center gap-1 transition-all duration-300 relative",
+            activeTab === item.id ? "text-neon-cyan scale-110" : "text-white/40 hover:text-white/60"
           )}
         >
-          <item.icon size={24} className={cn(activeTab === item.id && "drop-shadow-[0_0_8px_rgba(0,245,255,0.8)]")} />
-          <span className="text-[10px] font-display uppercase tracking-wider font-bold">{item.label}</span>
+          {activeTab === item.id && (
+            <motion.div 
+              layoutId="nav-active"
+              className="absolute -top-1 w-1 h-1 bg-neon-cyan rounded-full shadow-[0_0_8px_rgba(0,245,255,1)]"
+            />
+          )}
+          <item.icon size={22} className={cn(activeTab === item.id && "drop-shadow-[0_0_8px_rgba(0,245,255,0.8)]")} />
+          <span className="text-[9px] font-display uppercase tracking-widest font-bold">{item.label}</span>
         </button>
       ))}
     </div>
@@ -127,7 +152,6 @@ const Dashboard = ({ onNavigate, battery }: { onNavigate: (tab: Tab) => void; ba
   const [memory, setMemory] = useState<{ used: number; total: number } | null>(null);
 
   useEffect(() => {
-    // Real Memory Data (Chrome only)
     const updateMemory = () => {
       if ((performance as any).memory) {
         const mem = (performance as any).memory;
@@ -136,7 +160,6 @@ const Dashboard = ({ onNavigate, battery }: { onNavigate: (tab: Tab) => void; ba
           total: Math.round(mem.jsHeapSizeLimit / (1024 * 1024))
         });
       } else {
-        // Fallback simulated memory
         setMemory({ used: 420, total: 2048 });
       }
     };
@@ -150,117 +173,101 @@ const Dashboard = ({ onNavigate, battery }: { onNavigate: (tab: Tab) => void; ba
     setTimeout(() => {
       setHealthScore(100);
       setIsBoosting(false);
-    }, 2000);
+    }, 2500);
   };
 
   return (
-    <div className="pb-24 px-6 space-y-6">
+    <div className="pb-32 px-6 space-y-8">
       {/* Health Orb */}
-      <div className="relative flex justify-center py-8">
-        <div className="w-48 h-48 rounded-full border-4 border-neon-cyan/20 flex flex-col items-center justify-center relative">
+      <div className="relative flex justify-center py-10">
+        <div className="relative w-56 h-56">
           <motion.div 
-            className="absolute inset-0 rounded-full border-4 border-neon-cyan border-t-transparent"
-            animate={{ rotate: 360 }}
-            transition={{ duration: 2, repeat: Infinity, ease: "linear" }}
+            className="absolute inset-0 rounded-full border-[1px] border-neon-cyan/10"
+            animate={{ scale: [1, 1.1, 1] }}
+            transition={{ duration: 4, repeat: Infinity }}
           />
-          <span className="text-5xl font-display font-black text-white">{healthScore}</span>
-          <span className="text-xs font-display text-neon-cyan tracking-widest uppercase mt-1">Health</span>
+          <div className="absolute inset-4 rounded-full glass flex flex-col items-center justify-center shadow-[0_0_30px_rgba(0,245,255,0.1)]">
+            <motion.div 
+              className="absolute inset-0 rounded-full border-2 border-neon-cyan border-t-transparent"
+              animate={{ rotate: 360 }}
+              transition={{ duration: isBoosting ? 0.5 : 3, repeat: Infinity, ease: "linear" }}
+            />
+            <AnimatePresence mode="wait">
+              <motion.span 
+                key={healthScore}
+                initial={{ opacity: 0, y: 10 }}
+                animate={{ opacity: 1, y: 0 }}
+                className="text-6xl font-display font-black text-white"
+              >
+                {healthScore}
+              </motion.span>
+            </AnimatePresence>
+            <span className="text-[10px] font-display text-neon-cyan tracking-[0.3em] uppercase mt-2 font-bold">System Health</span>
+          </div>
         </div>
       </div>
 
-      <button 
+      <motion.button 
+        whileHover={{ scale: 1.02 }}
+        whileTap={{ scale: 0.98 }}
         onClick={handleBoost}
         disabled={isBoosting}
         className={cn(
-          "w-full py-4 rounded-2xl font-display font-bold text-lg tracking-widest uppercase transition-all",
-          isBoosting ? "bg-white/10 text-white/40" : "bg-neon-cyan text-bg-deep neon-glow-cyan"
+          "w-full py-5 rounded-2xl font-display font-bold text-lg tracking-[0.2em] uppercase transition-all relative overflow-hidden",
+          isBoosting ? "bg-white/5 text-white/20" : "bg-neon-cyan text-bg-deep neon-glow-cyan"
         )}
       >
-        {isBoosting ? "Optimizing..." : "One Tap Boost"}
-      </button>
+        {isBoosting && (
+          <motion.div 
+            className="absolute inset-0 bg-white/10"
+            initial={{ x: '-100%' }}
+            animate={{ x: '100%' }}
+            transition={{ duration: 1, repeat: Infinity, ease: "linear" }}
+          />
+        )}
+        <span className="relative z-10">{isBoosting ? "Optimizing..." : "One Tap Boost"}</span>
+      </motion.button>
 
       {/* Stats Grid */}
       <div className="grid grid-cols-3 gap-4">
-        <Card className="flex flex-col items-center gap-2" onClick={() => onNavigate('booster')}>
-          <div className="p-2 rounded-xl bg-neon-purple/10 text-neon-purple">
-            <Activity size={20} />
-          </div>
-          <div className="text-center">
-            <p className="text-xs font-display text-white/40 uppercase">RAM</p>
-            <p className="text-sm font-display font-bold">
-              {memory ? `${Math.round((memory.used / memory.total) * 100)}%` : '--%'}
-            </p>
-          </div>
-        </Card>
-        <Card className="flex flex-col items-center gap-2" onClick={() => onNavigate('storage')}>
-          <div className="p-2 rounded-xl bg-neon-cyan/10 text-neon-cyan">
-            <HardDrive size={20} />
-          </div>
-          <div className="text-center">
-            <p className="text-xs font-display text-white/40 uppercase">Disk</p>
-            <p className="text-sm font-display font-bold">52%</p>
-          </div>
-        </Card>
-        <Card className="flex flex-col items-center gap-2" onClick={() => onNavigate('battery')}>
-          <div className="p-2 rounded-xl bg-neon-green/10 text-neon-green">
-            <BatteryIcon size={20} />
-          </div>
-          <div className="text-center">
-            <p className="text-xs font-display text-white/40 uppercase">Power</p>
-            <p className="text-sm font-display font-bold">{battery ? `${battery.level}%` : '--%'}</p>
-          </div>
-        </Card>
+        {[
+          { label: 'RAM', value: memory ? `${Math.round((memory.used / memory.total) * 100)}%` : '--%', icon: Activity, color: 'text-neon-purple', bg: 'bg-neon-purple/10', tab: 'booster' },
+          { label: 'Disk', value: '52%', icon: HardDrive, color: 'text-neon-cyan', bg: 'bg-neon-cyan/10', tab: 'storage' },
+          { label: 'Power', value: battery ? `${battery.level}%` : '--%', icon: Battery, color: 'text-neon-green', bg: 'bg-neon-green/10', tab: 'battery' }
+        ].map((stat) => (
+          <Card key={stat.label} className="flex flex-col items-center gap-2 p-4" onClick={() => onNavigate(stat.tab as Tab)}>
+            <div className={cn("p-2 rounded-xl", stat.bg, stat.color)}>
+              <stat.icon size={18} />
+            </div>
+            <div className="text-center">
+              <p className="text-[9px] font-display text-white/30 uppercase tracking-widest">{stat.label}</p>
+              <p className="text-sm font-display font-bold text-white/90">{stat.value}</p>
+            </div>
+          </Card>
+        ))}
       </div>
 
       {/* Quick Actions Grid */}
       <div className="space-y-4">
-        <h2 className="text-xs font-display font-bold text-white/40 uppercase tracking-widest">Quick Actions</h2>
+        <h2 className="text-[10px] font-display font-bold text-white/30 uppercase tracking-[0.2em]">System Tools</h2>
         <div className="grid grid-cols-2 gap-4">
-          <Card className="flex items-center gap-4" onClick={() => onNavigate('cleaner')}>
-            <div className="p-3 rounded-2xl bg-neon-cyan/10 text-neon-cyan">
-              <Trash2 size={24} />
-            </div>
-            <div>
-              <p className="font-display font-bold text-sm">Cleaner</p>
-              <p className="text-[10px] text-white/40 uppercase">2.4 GB Junk</p>
-            </div>
-          </Card>
-          <Card className="flex items-center gap-4" onClick={() => onNavigate('cooler')}>
-            <div className="p-3 rounded-2xl bg-neon-orange/10 text-neon-orange">
-              <Thermometer size={24} />
-            </div>
-            <div>
-              <p className="font-display font-bold text-sm">CPU Cooler</p>
-              <p className="text-[10px] text-white/40 uppercase">38°C Normal</p>
-            </div>
-          </Card>
-          <Card className="flex items-center gap-4" onClick={() => onNavigate('network')}>
-            <div className="p-3 rounded-2xl bg-neon-purple/10 text-neon-purple">
-              <Wifi size={24} />
-            </div>
-            <div>
-              <p className="font-display font-bold text-sm">Network</p>
-              <p className="text-[10px] text-white/40 uppercase">Speed Test</p>
-            </div>
-          </Card>
-          <Card className="flex items-center gap-4" onClick={() => onNavigate('apps')}>
-            <div className="p-3 rounded-2xl bg-neon-green/10 text-neon-green">
-              <Smartphone size={24} />
-            </div>
-            <div>
-              <p className="font-display font-bold text-sm">App Manager</p>
-              <p className="text-[10px] text-white/40 uppercase">8 Apps</p>
-            </div>
-          </Card>
-          <Card className="flex items-center gap-4" onClick={() => onNavigate('game')}>
-            <div className="p-3 rounded-2xl bg-neon-purple/10 text-neon-purple">
-              <Play size={24} />
-            </div>
-            <div>
-              <p className="font-display font-bold text-sm">Game Boost</p>
-              <p className="text-[10px] text-white/40 uppercase">3 Games</p>
-            </div>
-          </Card>
+          {[
+            { id: 'cleaner', label: 'Cleaner', sub: '2.4 GB Junk', icon: Trash2, color: 'text-neon-cyan', bg: 'bg-neon-cyan/10' },
+            { id: 'cooler', label: 'CPU Cooler', sub: '38°C Normal', icon: Thermometer, color: 'text-neon-orange', bg: 'bg-neon-orange/10' },
+            { id: 'network', label: 'Network', sub: 'Speed Test', icon: Wifi, color: 'text-neon-purple', bg: 'bg-neon-purple/10' },
+            { id: 'apps', label: 'Apps', sub: '8 Manager', icon: Smartphone, color: 'text-neon-green', bg: 'bg-neon-green/10' },
+            { id: 'game', label: 'Game Boost', sub: '3 Games', icon: Play, color: 'text-neon-purple', bg: 'bg-neon-purple/10' }
+          ].map((tool) => (
+            <Card key={tool.id} className="flex items-center gap-4 p-4" onClick={() => onNavigate(tool.id as Tab)}>
+              <div className={cn("p-3 rounded-2xl", tool.bg, tool.color)}>
+                <tool.icon size={22} />
+              </div>
+              <div>
+                <p className="font-display font-bold text-xs text-white/90">{tool.label}</p>
+                <p className="text-[9px] text-white/30 uppercase tracking-wider">{tool.sub}</p>
+              </div>
+            </Card>
+          ))}
         </div>
       </div>
     </div>
@@ -270,6 +277,7 @@ const Dashboard = ({ onNavigate, battery }: { onNavigate: (tab: Tab) => void; ba
 const JunkCleaner = () => {
   const [isScanning, setIsScanning] = useState(false);
   const [junkFound, setJunkFound] = useState<number | null>(null);
+  const [isCleaning, setIsCleaning] = useState(false);
   const [categories, setCategories] = useState<{ name: string; size: string; icon: any }[]>([
     { name: 'System Cache', size: '0 MB', icon: Trash2 },
     { name: 'App Logs', size: '0 MB', icon: History },
@@ -292,25 +300,37 @@ const JunkCleaner = () => {
     }, 3000);
   };
 
+  const handleClean = () => {
+    setIsCleaning(true);
+    setTimeout(() => {
+      setIsCleaning(false);
+      setJunkFound(0);
+      setCategories(prev => prev.map(c => ({ ...c, size: '0 MB' })));
+    }, 2500);
+  };
+
   return (
-    <div className="px-6 space-y-8 pb-24">
+    <div className="px-6 space-y-8 pb-32">
       <div className="flex flex-col items-center justify-center py-12 text-center">
-        <div className="relative w-40 h-40 mb-8">
+        <div className="relative w-48 h-48 mb-8">
           <AnimatePresence mode="wait">
-            {isScanning ? (
+            {isScanning || isCleaning ? (
               <motion.div 
-                key="scanning"
+                key="active"
                 initial={{ opacity: 0, scale: 0.8 }}
                 animate={{ opacity: 1, scale: 1 }}
                 exit={{ opacity: 0, scale: 1.2 }}
                 className="absolute inset-0 flex items-center justify-center"
               >
-                <div className="w-full h-full rounded-full border-2 border-neon-cyan/20 relative overflow-hidden">
+                <div className="w-full h-full rounded-full border-2 border-neon-cyan/20 relative overflow-hidden glass">
                   <motion.div 
-                    className="absolute top-0 left-0 w-full h-1 bg-neon-cyan shadow-[0_0_15px_rgba(0,245,255,0.8)]"
+                    className="absolute top-0 left-0 w-full h-1.5 bg-neon-cyan shadow-[0_0_20px_rgba(0,245,255,1)]"
                     animate={{ top: ['0%', '100%', '0%'] }}
                     transition={{ duration: 1.5, repeat: Infinity, ease: "easeInOut" }}
                   />
+                  <div className="absolute inset-0 flex items-center justify-center">
+                    <Trash2 size={48} className="text-neon-cyan/40 animate-pulse" />
+                  </div>
                 </div>
               </motion.div>
             ) : (
@@ -320,7 +340,7 @@ const JunkCleaner = () => {
                 animate={{ opacity: 1, scale: 1 }}
                 className="absolute inset-0 flex items-center justify-center"
               >
-                <div className="p-8 rounded-full bg-neon-cyan/10 text-neon-cyan">
+                <div className="p-10 rounded-full bg-neon-cyan/10 text-neon-cyan shadow-[0_0_40px_rgba(0,245,255,0.1)] border border-neon-cyan/20">
                   <Trash2 size={64} />
                 </div>
               </motion.div>
@@ -328,30 +348,41 @@ const JunkCleaner = () => {
           </AnimatePresence>
         </div>
 
-        <h2 className="text-2xl font-display font-bold mb-2">
-          {isScanning ? "Scanning for Junk..." : junkFound ? `${junkFound} GB Junk Found` : "Ready to Clean"}
+        <h2 className="text-3xl font-display font-black mb-2 text-white">
+          {isScanning ? "Scanning..." : isCleaning ? "Cleaning..." : junkFound ? `${junkFound} GB Found` : "System Clean"}
         </h2>
-        <p className="text-white/40 text-sm max-w-[240px]">
-          Remove cache, temporary files and system logs to free up space.
+        <p className="text-white/30 text-xs font-display uppercase tracking-widest max-w-[240px]">
+          {junkFound ? "Optimization recommended" : "No junk files detected"}
         </p>
       </div>
 
-      <button 
-        onClick={junkFound ? () => setJunkFound(0) : handleScan}
-        className="w-full py-4 rounded-2xl bg-neon-cyan text-bg-deep font-display font-bold text-lg tracking-widest uppercase neon-glow-cyan"
+      <motion.button 
+        whileHover={{ scale: 1.02 }}
+        whileTap={{ scale: 0.98 }}
+        onClick={junkFound ? handleClean : handleScan}
+        disabled={isScanning || isCleaning}
+        className={cn(
+          "w-full py-5 rounded-2xl font-display font-bold text-lg tracking-[0.2em] uppercase transition-all",
+          isScanning || isCleaning ? "bg-white/5 text-white/20" : "bg-neon-cyan text-bg-deep neon-glow-cyan"
+        )}
       >
-        {junkFound ? "Clean Now" : "Start Scan"}
-      </button>
+        {isScanning ? "Scanning..." : isCleaning ? "Cleaning..." : junkFound ? "Clean Now" : "Start Scan"}
+      </motion.button>
 
       <div className="space-y-3">
         {categories.map((cat) => (
-          <div key={cat.name} className="flex items-center gap-4 p-4 bg-bg-card rounded-xl border border-white/5">
+          <motion.div 
+            key={cat.name} 
+            initial={{ opacity: 0, x: -20 }}
+            animate={{ opacity: 1, x: 0 }}
+            className="flex items-center gap-4 p-4 glass rounded-xl"
+          >
             <div className="p-2 rounded-lg bg-white/5 text-neon-cyan">
               <cat.icon size={18} />
             </div>
-            <span className="flex-1 text-sm font-display text-white/60">{cat.name}</span>
+            <span className="flex-1 text-sm font-display text-white/60 font-medium">{cat.name}</span>
             <span className="text-sm font-display font-bold text-neon-cyan">{cat.size}</span>
-          </div>
+          </motion.div>
         ))}
       </div>
     </div>
@@ -389,55 +420,68 @@ const RAMBooster = () => {
   const usagePercent = Math.round((memory.used / memory.total) * 100);
 
   return (
-    <div className="px-6 space-y-6 pb-24">
-      <Card className="p-6 text-center space-y-4">
+    <div className="px-6 space-y-6 pb-32">
+      <Card className="p-8 text-center space-y-6 relative overflow-hidden">
+        <motion.div 
+          className="absolute -right-10 -top-10 w-32 h-32 bg-neon-purple/5 rounded-full blur-3xl"
+          animate={{ scale: [1, 1.2, 1] }}
+          transition={{ duration: 4, repeat: Infinity }}
+        />
         <div className="flex justify-center">
-          <div className="p-4 rounded-full bg-neon-purple/10 text-neon-purple">
-            <Zap size={48} />
+          <div className="p-5 rounded-full bg-neon-purple/10 text-neon-purple shadow-[0_0_20px_rgba(191,0,255,0.2)]">
+            <Zap size={48} className={cn(isBoosting && "animate-bounce")} />
           </div>
         </div>
         <div>
-          <p className="text-3xl font-display font-black">{usagePercent}%</p>
-          <p className="text-xs font-display text-white/40 uppercase tracking-widest">RAM Usage</p>
+          <p className="text-5xl font-display font-black text-white">{usagePercent}%</p>
+          <p className="text-[10px] font-display text-white/30 uppercase tracking-[0.3em] mt-1 font-bold">RAM Usage</p>
         </div>
-        <div className="w-full h-2 bg-white/5 rounded-full overflow-hidden">
+        <div className="w-full h-2.5 bg-white/5 rounded-full overflow-hidden p-[2px]">
           <motion.div 
-            className="h-full bg-neon-purple"
+            className="h-full bg-gradient-to-r from-neon-purple to-neon-cyan rounded-full"
             initial={{ width: '0%' }}
             animate={{ width: `${usagePercent}%` }}
-            transition={{ duration: 1 }}
+            transition={{ duration: 1.5, ease: "easeOut" }}
           />
         </div>
-        <p className="text-[10px] text-white/20 uppercase font-display">
+        <p className="text-[10px] text-white/20 uppercase font-display tracking-widest">
           {memory.used} MB / {memory.total} MB
         </p>
       </Card>
 
-      <button 
+      <motion.button 
+        whileHover={{ scale: 1.02 }}
+        whileTap={{ scale: 0.98 }}
         onClick={handleBoost}
         disabled={isBoosting}
-        className="w-full py-4 rounded-2xl bg-neon-purple text-white font-display font-bold text-lg tracking-widest uppercase neon-glow-purple"
+        className="w-full py-5 rounded-2xl bg-neon-purple text-white font-display font-bold text-lg tracking-[0.2em] uppercase neon-glow-purple"
       >
         {isBoosting ? "Boosting..." : freed ? `Freed ${freed} MB` : "Boost Now"}
-      </button>
+      </motion.button>
 
       <div className="space-y-4">
-        <h3 className="text-xs font-display font-bold text-white/40 uppercase tracking-widest">Active Processes</h3>
+        <h3 className="text-[10px] font-display font-bold text-white/30 uppercase tracking-[0.2em]">Active Processes</h3>
         <div className="space-y-3">
-          {MOCK_APPS.slice(0, 5).map((app) => (
-            <div key={app.id} className="flex items-center gap-4 p-3 bg-bg-card rounded-xl border border-white/5">
+          {MOCK_APPS.slice(0, 5).map((app, i) => (
+            <motion.div 
+              key={app.id} 
+              initial={{ opacity: 0, y: 10 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ delay: i * 0.1 }}
+              className="flex items-center gap-4 p-4 glass rounded-xl"
+            >
               <div className="w-10 h-10 flex items-center justify-center bg-white/5 rounded-lg text-xl">
                 {app.icon}
               </div>
               <div className="flex-1">
-                <p className="text-sm font-display font-bold">{app.name}</p>
-                <p className="text-[10px] text-white/40 uppercase">{app.size}</p>
+                <p className="text-sm font-display font-bold text-white/90">{app.name}</p>
+                <p className="text-[9px] text-white/30 uppercase tracking-wider">{app.size}</p>
               </div>
-              <div className="flex flex-col items-end">
+              <div className="flex flex-col items-end gap-1">
                 <span className="text-[10px] text-neon-purple font-display font-bold">{(Math.random() * 5 + 2).toFixed(1)}%</span>
-                <div className="w-2 h-2 rounded-full bg-neon-green" />
+                <div className="w-1.5 h-1.5 rounded-full bg-neon-green shadow-[0_0_5px_rgba(0,255,136,1)]" />
               </div>
-            </div>
+            </motion.div>
           ))}
         </div>
       </div>
@@ -462,60 +506,65 @@ const NetworkSpeed = () => {
   };
 
   return (
-    <div className="px-6 space-y-8 pb-24">
+    <div className="px-6 space-y-8 pb-32">
       <div className="flex flex-col items-center justify-center py-12 text-center">
-        <div className="relative w-48 h-48 mb-8 flex items-center justify-center">
+        <div className="relative w-56 h-56 mb-8 flex items-center justify-center">
           <motion.div 
-            className="absolute inset-0 rounded-full border-4 border-neon-purple/20"
+            className="absolute inset-0 rounded-full border-2 border-neon-purple/20"
             animate={isTesting ? { scale: [1, 1.1, 1], opacity: [0.2, 0.5, 0.2] } : {}}
             transition={{ duration: 1.5, repeat: Infinity }}
           />
-          <div className="flex flex-col items-center">
+          <motion.div 
+            className="absolute inset-4 rounded-full border-[1px] border-neon-purple/10"
+            animate={isTesting ? { rotate: 360 } : {}}
+            transition={{ duration: 2, repeat: Infinity, ease: "linear" }}
+          />
+          <div className="flex flex-col items-center relative z-10">
             <Wifi size={48} className={cn(isTesting ? "text-neon-purple animate-pulse" : "text-white/20")} />
             {speed && (
               <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }}>
-                <p className="text-4xl font-display font-black text-white mt-2">{speed}</p>
-                <p className="text-[10px] font-display text-white/40 uppercase">Mbps</p>
+                <p className="text-5xl font-display font-black text-white mt-2">{speed}</p>
+                <p className="text-[10px] font-display text-white/30 uppercase tracking-widest font-bold">Mbps</p>
               </motion.div>
             )}
           </div>
         </div>
 
         <div className="grid grid-cols-2 w-full gap-4">
-          <Card className="text-center">
-            <p className="text-[10px] font-display text-white/40 uppercase mb-1">Ping</p>
-            <p className="text-lg font-display font-bold text-neon-purple">{ping ? `${ping} ms` : '--'}</p>
+          <Card className="text-center p-4">
+            <p className="text-[9px] font-display text-white/30 uppercase tracking-widest mb-1 font-bold">Ping</p>
+            <p className="text-xl font-display font-bold text-neon-purple">{ping ? `${ping} ms` : '--'}</p>
           </Card>
-          <Card className="text-center">
-            <p className="text-[10px] font-display text-white/40 uppercase mb-1">Jitter</p>
-            <p className="text-lg font-display font-bold text-neon-purple">{ping ? `${Math.floor(ping/4)} ms` : '--'}</p>
+          <Card className="text-center p-4">
+            <p className="text-[9px] font-display text-white/30 uppercase tracking-widest mb-1 font-bold">Jitter</p>
+            <p className="text-xl font-display font-bold text-neon-purple">{ping ? `${Math.floor(ping/4)} ms` : '--'}</p>
           </Card>
         </div>
       </div>
 
-      <button 
+      <motion.button 
+        whileHover={{ scale: 1.02 }}
+        whileTap={{ scale: 0.98 }}
         onClick={startTest}
         disabled={isTesting}
-        className="w-full py-4 rounded-2xl bg-neon-purple text-white font-display font-bold text-lg tracking-widest uppercase neon-glow-purple"
+        className="w-full py-5 rounded-2xl bg-neon-purple text-white font-display font-bold text-lg tracking-[0.2em] uppercase neon-glow-purple"
       >
         {isTesting ? "Testing..." : "Start Speed Test"}
-      </button>
+      </motion.button>
 
       <div className="space-y-4">
-        <h3 className="text-xs font-display font-bold text-white/40 uppercase tracking-widest">Network Info</h3>
-        <Card className="space-y-3">
-          <div className="flex justify-between items-center">
-            <span className="text-sm text-white/60">Connection</span>
-            <span className="text-sm font-bold text-neon-green">4G / WiFi</span>
-          </div>
-          <div className="flex justify-between items-center">
-            <span className="text-sm text-white/60">IP Address</span>
-            <span className="text-sm font-bold text-white/80">192.168.1.104</span>
-          </div>
-          <div className="flex justify-between items-center">
-            <span className="text-sm text-white/60">Security</span>
-            <span className="text-sm font-bold text-neon-green">WPA3 Secure</span>
-          </div>
+        <h3 className="text-[10px] font-display font-bold text-white/30 uppercase tracking-[0.2em]">Network Info</h3>
+        <Card className="space-y-4 p-5">
+          {[
+            { label: 'Connection', val: '4G / WiFi', color: 'text-neon-green' },
+            { label: 'IP Address', val: '192.168.1.104', color: 'text-white/80' },
+            { label: 'Security', val: 'WPA3 Secure', color: 'text-neon-green' }
+          ].map((info) => (
+            <div key={info.label} className="flex justify-between items-center">
+              <span className="text-xs text-white/40 uppercase tracking-wider font-bold">{info.label}</span>
+              <span className={cn("text-sm font-display font-bold", info.color)}>{info.val}</span>
+            </div>
+          ))}
         </Card>
       </div>
     </div>
@@ -536,9 +585,9 @@ const SecurityScan = () => {
   };
 
   return (
-    <div className="px-6 space-y-8 pb-24">
+    <div className="px-6 space-y-8 pb-32">
       <div className="flex flex-col items-center justify-center py-12 text-center">
-        <div className="relative w-40 h-40 mb-8">
+        <div className="relative w-48 h-48 mb-8">
           <AnimatePresence mode="wait">
             {status === 'scanning' ? (
               <motion.div 
@@ -548,7 +597,12 @@ const SecurityScan = () => {
                 transition={{ duration: 2, repeat: Infinity, ease: "linear" }}
                 className="absolute inset-0 flex items-center justify-center"
               >
-                <div className="w-full h-full rounded-full border-4 border-neon-green/20 border-t-neon-green shadow-[0_0_15px_rgba(0,255,136,0.3)]" />
+                <div className="w-full h-full rounded-full border-4 border-neon-green/20 border-t-neon-green shadow-[0_0_20px_rgba(0,255,136,0.3)]" />
+                <motion.div 
+                  className="absolute inset-4 rounded-full border-2 border-dashed border-neon-green/40"
+                  animate={{ rotate: -360 }}
+                  transition={{ duration: 4, repeat: Infinity, ease: "linear" }}
+                />
               </motion.div>
             ) : status === 'safe' ? (
               <motion.div 
@@ -557,7 +611,7 @@ const SecurityScan = () => {
                 animate={{ opacity: 1, scale: 1 }}
                 className="absolute inset-0 flex items-center justify-center"
               >
-                <div className="p-8 rounded-full bg-neon-green/10 text-neon-green">
+                <div className="p-10 rounded-full bg-neon-green/10 text-neon-green shadow-[0_0_40px_rgba(0,255,136,0.2)] border border-neon-green/20">
                   <ShieldCheck size={64} />
                 </div>
               </motion.div>
@@ -568,7 +622,7 @@ const SecurityScan = () => {
                 animate={{ opacity: 1, scale: 1 }}
                 className="absolute inset-0 flex items-center justify-center"
               >
-                <div className="p-8 rounded-full bg-neon-green/10 text-neon-green">
+                <div className="p-10 rounded-full bg-neon-green/10 text-neon-green shadow-[0_0_40px_rgba(0,255,136,0.1)] border border-neon-green/20">
                   <ShieldAlert size={64} />
                 </div>
               </motion.div>
@@ -576,40 +630,48 @@ const SecurityScan = () => {
           </AnimatePresence>
         </div>
 
-        <h2 className="text-2xl font-display font-bold mb-2">
-          {status === 'scanning' ? "Scanning for Threats..." : status === 'safe' ? "Device is Secure" : "Security Check"}
+        <h2 className="text-3xl font-display font-black mb-2 text-white">
+          {status === 'scanning' ? "Scanning..." : status === 'safe' ? "Device Secure" : "Security Check"}
         </h2>
-        <p className="text-white/40 text-sm max-w-[240px]">
-          Check for malicious apps, system vulnerabilities and privacy risks.
+        <p className="text-white/30 text-xs font-display uppercase tracking-widest max-w-[240px]">
+          {status === 'safe' ? "No threats detected" : "Protect your device from malware"}
         </p>
       </div>
 
-      <button 
+      <motion.button 
+        whileHover={{ scale: 1.02 }}
+        whileTap={{ scale: 0.98 }}
         onClick={handleScan}
         disabled={isScanning}
-        className="w-full py-4 rounded-2xl bg-neon-green text-bg-deep font-display font-bold text-lg tracking-widest uppercase neon-glow-green"
+        className="w-full py-5 rounded-2xl bg-neon-green text-bg-deep font-display font-bold text-lg tracking-[0.2em] uppercase neon-glow-green"
       >
         {isScanning ? "Scanning..." : "Start Security Scan"}
-      </button>
+      </motion.button>
 
       <div className="space-y-3">
         {[
           { name: 'Malware Scan', status: status === 'safe' ? 'No threats' : 'Pending', icon: Lock },
           { name: 'Privacy Check', status: status === 'safe' ? 'Secure' : 'Pending', icon: ShieldCheck },
           { name: 'App Permissions', status: status === 'safe' ? 'Verified' : 'Pending', icon: Info },
-        ].map((item) => (
-          <div key={item.name} className="flex items-center gap-4 p-4 bg-bg-card rounded-xl border border-white/5">
+        ].map((item, i) => (
+          <motion.div 
+            key={item.name} 
+            initial={{ opacity: 0, x: -20 }}
+            animate={{ opacity: 1, x: 0 }}
+            transition={{ delay: i * 0.1 }}
+            className="flex items-center gap-4 p-4 glass rounded-xl"
+          >
             <div className="p-2 rounded-lg bg-white/5 text-neon-green">
               <item.icon size={18} />
             </div>
-            <span className="flex-1 text-sm font-display text-white/60">{item.name}</span>
+            <span className="flex-1 text-sm font-display text-white/60 font-medium">{item.name}</span>
             <span className={cn(
-              "text-[10px] font-display font-bold uppercase tracking-wider",
+              "text-[9px] font-display font-bold uppercase tracking-widest",
               status === 'safe' ? "text-neon-green" : "text-white/20"
             )}>
               {item.status}
             </span>
-          </div>
+          </motion.div>
         ))}
       </div>
     </div>
@@ -647,6 +709,7 @@ export default function App() {
   }, []);
 
   const navigateTo = (tab: Tab) => {
+    if (tab === activeTab) return;
     setActiveTab(tab);
     setViewStack(prev => [...prev, tab]);
   };
@@ -720,43 +783,57 @@ export default function App() {
       case 'network': return <NetworkSpeed />;
       case 'security': return <SecurityScan />;
       case 'game': return (
-        <div className="px-6 space-y-6 pb-24">
+        <div className="px-6 space-y-8 pb-32">
           <div className="flex flex-col items-center justify-center py-10 text-center">
-            <Play size={80} className="text-neon-green mb-4 drop-shadow-[0_0_15px_rgba(0,255,136,0.4)]" />
+            <div className="relative w-32 h-32 mb-6">
+              <motion.div 
+                className="absolute inset-0 bg-neon-green/10 rounded-full blur-2xl"
+                animate={{ scale: [1, 1.2, 1] }}
+                transition={{ duration: 3, repeat: Infinity }}
+              />
+              <Play size={80} className="text-neon-green relative z-10 drop-shadow-[0_0_20px_rgba(0,255,136,0.5)]" />
+            </div>
             <h2 className="text-3xl font-display font-black mb-1 text-white">Game Booster</h2>
-            <p className="text-white/40 uppercase tracking-widest text-[10px] font-bold">Optimize for Gaming</p>
+            <p className="text-white/30 uppercase tracking-[0.3em] text-[10px] font-bold">Max Performance Mode</p>
           </div>
 
-          <Card className="flex items-center justify-between">
-            <div className="flex items-center gap-3">
-              <div className="p-2 rounded-lg bg-neon-cyan/10 text-neon-cyan">
-                <ShieldAlert size={18} />
+          <Card className="flex items-center justify-between p-5">
+            <div className="flex items-center gap-4">
+              <div className="p-3 rounded-2xl bg-neon-cyan/10 text-neon-cyan">
+                <ShieldAlert size={20} />
               </div>
               <div>
-                <p className="text-sm font-display font-bold">Do Not Disturb</p>
-                <p className="text-[10px] text-white/40 uppercase">Block notifications</p>
+                <p className="text-sm font-display font-bold text-white/90">Do Not Disturb</p>
+                <p className="text-[9px] text-white/30 uppercase tracking-wider">Block notifications</p>
               </div>
             </div>
-            <div className="w-10 h-5 bg-neon-cyan/20 rounded-full relative">
-              <div className="absolute right-1 top-1 w-3 h-3 bg-neon-cyan rounded-full" />
+            <div className="w-12 h-6 bg-neon-cyan/10 rounded-full relative p-1 border border-neon-cyan/20">
+              <motion.div 
+                className="w-4 h-4 bg-neon-cyan rounded-full shadow-[0_0_10px_rgba(0,245,255,1)]"
+                animate={{ x: 20 }}
+              />
             </div>
           </Card>
 
           <div className="space-y-4">
-            <h3 className="text-xs font-display font-bold text-white/40 uppercase tracking-widest">Installed Games</h3>
-            <div className="grid grid-cols-1 gap-3">
+            <h3 className="text-[10px] font-display font-bold text-white/30 uppercase tracking-[0.2em]">Installed Games</h3>
+            <div className="grid grid-cols-1 gap-4">
               {MOCK_APPS.filter(app => app.isGame).map((game) => (
-                <Card key={game.id} className="flex items-center gap-4">
-                  <div className="w-12 h-12 flex items-center justify-center bg-white/5 rounded-xl text-2xl">
+                <Card key={game.id} className="flex items-center gap-4 p-4">
+                  <div className="w-14 h-14 flex items-center justify-center bg-white/5 rounded-2xl text-3xl">
                     {game.icon}
                   </div>
                   <div className="flex-1">
-                    <p className="font-display font-bold">{game.name}</p>
-                    <p className="text-[10px] text-white/40 uppercase">Optimized</p>
+                    <p className="font-display font-bold text-white/90">{game.name}</p>
+                    <p className="text-[9px] text-neon-green font-bold uppercase tracking-widest">Optimized</p>
                   </div>
-                  <button className="px-4 py-2 rounded-lg bg-neon-green text-bg-deep font-display font-bold text-[10px] uppercase">
+                  <motion.button 
+                    whileHover={{ scale: 1.05 }}
+                    whileTap={{ scale: 0.95 }}
+                    className="px-5 py-2.5 rounded-xl bg-neon-green text-bg-deep font-display font-bold text-[10px] uppercase tracking-widest shadow-[0_0_15px_rgba(0,255,136,0.3)]"
+                  >
                     Launch
-                  </button>
+                  </motion.button>
                 </Card>
               ))}
             </div>
@@ -764,178 +841,262 @@ export default function App() {
         </div>
       );
       case 'apps': return (
-        <div className="px-6 space-y-6 pb-24">
+        <div className="px-6 space-y-6 pb-32">
           <div className="relative">
             <Search className="absolute left-4 top-1/2 -translate-y-1/2 text-white/20" size={18} />
             <input 
               type="text" 
               placeholder="Search apps..."
-              className="w-full bg-bg-card border border-white/5 rounded-xl py-3 pl-12 pr-4 font-display text-sm focus:outline-none focus:border-neon-cyan/50"
+              className="w-full glass border border-white/5 rounded-2xl py-4 pl-12 pr-4 font-display text-sm focus:outline-none focus:border-neon-cyan/50 transition-all"
             />
           </div>
-          <div className="space-y-3">
-            {MOCK_APPS.map((app) => (
-              <Card key={app.id} className="flex items-center gap-4">
-                <div className="w-12 h-12 flex items-center justify-center bg-white/5 rounded-xl text-2xl">
-                  {app.icon}
-                </div>
-                <div className="flex-1">
-                  <p className="font-display font-bold">{app.name}</p>
-                  <div className="flex items-center gap-2 text-[10px] text-white/40 uppercase">
-                    <span>{app.size}</span>
-                    <span>•</span>
-                    <span>{app.lastUsed}</span>
+          <div className="space-y-4">
+            {MOCK_APPS.map((app, i) => (
+              <motion.div
+                key={app.id}
+                initial={{ opacity: 0, y: 10 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ delay: i * 0.05 }}
+              >
+                <Card className="flex items-center gap-4 p-4">
+                  <div className="w-14 h-14 flex items-center justify-center bg-white/5 rounded-2xl text-3xl">
+                    {app.icon}
                   </div>
-                </div>
-                <button className="p-2 text-neon-red active:scale-90 transition-transform">
-                  <Trash2 size={20} />
-                </button>
-              </Card>
+                  <div className="flex-1">
+                    <p className="font-display font-bold text-white/90">{app.name}</p>
+                    <div className="flex items-center gap-2 text-[9px] text-white/30 uppercase tracking-widest font-bold">
+                      <span>{app.size}</span>
+                      <span className="text-neon-cyan">•</span>
+                      <span>{app.lastUsed}</span>
+                    </div>
+                  </div>
+                  <motion.button 
+                    whileHover={{ scale: 1.1, color: '#ff0055' }}
+                    whileTap={{ scale: 0.9 }}
+                    className="p-3 text-white/20 hover:bg-neon-red/10 rounded-xl transition-colors"
+                  >
+                    <Trash2 size={20} />
+                  </motion.button>
+                </Card>
+              </motion.div>
             ))}
           </div>
         </div>
       );
       case 'storage': return (
-        <div className="px-6 space-y-8 pb-24">
-          <div className="h-64 flex items-center justify-center">
+        <div className="px-6 space-y-10 pb-32">
+          <div className="h-72 flex items-center justify-center relative">
+            <motion.div 
+              className="absolute w-64 h-64 rounded-full border border-white/5"
+              animate={{ scale: [1, 1.05, 1] }}
+              transition={{ duration: 4, repeat: Infinity }}
+            />
             <ResponsiveContainer width="100%" height="100%">
               <PieChart>
                 <Pie
                   data={STORAGE_DATA}
                   cx="50%"
                   cy="50%"
-                  innerRadius={60}
-                  outerRadius={80}
-                  paddingAngle={5}
+                  innerRadius={70}
+                  outerRadius={95}
+                  paddingAngle={8}
                   dataKey="value"
+                  stroke="none"
                 >
                   {STORAGE_DATA.map((entry, index) => (
-                    <Cell key={`cell-${index}`} fill={entry.color} />
+                    <Cell 
+                      key={`cell-${index}`} 
+                      fill={entry.color} 
+                      className="drop-shadow-[0_0_10px_rgba(255,255,255,0.1)]"
+                    />
                   ))}
                 </Pie>
               </PieChart>
             </ResponsiveContainer>
             <div className="absolute flex flex-col items-center">
-              <span className="text-3xl font-display font-black">52%</span>
-              <span className="text-[10px] font-display text-white/40 uppercase">Used</span>
+              <motion.span 
+                initial={{ opacity: 0, scale: 0.5 }}
+                animate={{ opacity: 1, scale: 1 }}
+                className="text-5xl font-display font-black text-white"
+              >
+                52%
+              </motion.span>
+              <span className="text-[10px] font-display text-white/30 uppercase tracking-[0.3em] font-bold">Used Space</span>
             </div>
           </div>
           <div className="grid grid-cols-2 gap-4">
-            {STORAGE_DATA.map((item) => (
-              <Card key={item.name} className="flex items-center gap-3">
-                <div className="w-3 h-3 rounded-full" style={{ backgroundColor: item.color }} />
-                <div>
-                  <p className="text-xs font-display font-bold">{item.name}</p>
-                  <p className="text-[10px] text-white/40 uppercase">{item.value}%</p>
-                </div>
-              </Card>
+            {STORAGE_DATA.map((item, i) => (
+              <motion.div
+                key={item.name}
+                initial={{ opacity: 0, y: 10 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ delay: i * 0.1 }}
+              >
+                <Card className="flex items-center gap-4 p-4">
+                  <div className="w-3 h-3 rounded-full shadow-[0_0_8px_currentColor]" style={{ backgroundColor: item.color, color: item.color }} />
+                  <div>
+                    <p className="text-xs font-display font-bold text-white/90">{item.name}</p>
+                    <p className="text-[9px] text-white/30 uppercase tracking-widest font-bold">{item.value}%</p>
+                  </div>
+                </Card>
+              </motion.div>
+            ))}
+          </div>
+          <Card className="p-6 space-y-4">
+            <div className="flex justify-between items-center">
+              <h3 className="text-[10px] font-display font-bold text-white/30 uppercase tracking-[0.2em]">Storage Health</h3>
+              <span className="text-xs font-display font-bold text-neon-green">Good</span>
+            </div>
+            <div className="w-full h-1.5 bg-white/5 rounded-full overflow-hidden">
+              <div className="h-full bg-neon-green w-[85%] rounded-full" />
+            </div>
+          </Card>
+        </div>
+      );
+      case 'battery': return (
+        <div className="px-6 space-y-8 pb-32">
+          <div className="flex flex-col items-center justify-center py-12 text-center">
+            <div className="relative w-48 h-48 mb-8 flex items-center justify-center">
+              <motion.div 
+                className="absolute inset-0 bg-neon-orange/5 rounded-full blur-3xl"
+                animate={{ scale: [1, 1.2, 1], opacity: [0.3, 0.5, 0.3] }}
+                transition={{ duration: 4, repeat: Infinity }}
+              />
+              <div className="relative z-10 flex flex-col items-center">
+                <Battery size={80} className="text-neon-orange mb-4 drop-shadow-[0_0_20px_rgba(255,165,0,0.4)]" />
+                <motion.span 
+                  initial={{ opacity: 0 }}
+                  animate={{ opacity: 1 }}
+                  className="text-5xl font-display font-black text-white"
+                >
+                  {battery ? battery.level : 78}%
+                </motion.span>
+              </div>
+              <svg className="absolute inset-0 w-full h-full -rotate-90">
+                <circle
+                  cx="50%"
+                  cy="50%"
+                  r="90"
+                  className="stroke-white/5 fill-none"
+                  strokeWidth="4"
+                />
+                <motion.circle
+                  cx="50%"
+                  cy="50%"
+                  r="90"
+                  className="stroke-neon-orange fill-none"
+                  strokeWidth="4"
+                  strokeLinecap="round"
+                  initial={{ strokeDasharray: "0 565" }}
+                  animate={{ strokeDasharray: `${((battery ? battery.level : 78) / 100) * 565} 565` }}
+                  transition={{ duration: 2, ease: "easeOut" }}
+                />
+              </svg>
+            </div>
+            <h2 className="text-2xl font-display font-black text-white mb-1">Battery Health: Good</h2>
+            <p className="text-white/30 uppercase tracking-[0.3em] text-[10px] font-bold">Estimated: 14h 20m left</p>
+          </div>
+
+          <div className="grid grid-cols-1 gap-4">
+            {[
+              { label: 'Power Saving Mode', desc: 'Extend battery life by 2 hours', active: true },
+              { label: 'Ultra Power Saving', desc: 'Only essential apps', active: false },
+              { label: 'Adaptive Battery', desc: 'Limit background apps', active: true },
+            ].map((mode, i) => (
+              <motion.div
+                key={mode.label}
+                initial={{ opacity: 0, x: -20 }}
+                animate={{ opacity: 1, x: 0 }}
+                transition={{ delay: i * 0.1 }}
+              >
+                <Card className="flex items-center justify-between p-5">
+                  <div>
+                    <p className="text-sm font-display font-bold text-white/90">{mode.label}</p>
+                    <p className="text-[9px] text-white/30 uppercase tracking-widest font-bold">{mode.desc}</p>
+                  </div>
+                  <div className={cn(
+                    "w-12 h-6 rounded-full relative p-1 border transition-colors",
+                    mode.active ? "bg-neon-orange/20 border-neon-orange/40" : "bg-white/5 border-white/10"
+                  )}>
+                    <motion.div 
+                      className={cn(
+                        "w-4 h-4 rounded-full shadow-lg",
+                        mode.active ? "bg-neon-orange shadow-neon-orange/50" : "bg-white/20"
+                      )}
+                      animate={{ x: mode.active ? 20 : 0 }}
+                    />
+                  </div>
+                </Card>
+              </motion.div>
             ))}
           </div>
         </div>
       );
-      case 'battery': return (
-        <div className="px-6 space-y-6 pb-24">
-          <div className="flex flex-col items-center justify-center py-10 text-center">
-            <BatteryIcon size={80} className="text-neon-green mb-4 drop-shadow-[0_0_15px_rgba(0,255,136,0.4)]" />
-            <h2 className="text-4xl font-display font-black mb-1 text-white">{battery ? `${battery.level}%` : '78%'}</h2>
-            <p className="text-neon-green uppercase tracking-widest text-[10px] font-bold">Battery Health: Excellent</p>
-          </div>
-
-          <Card className="space-y-4">
-            <h3 className="text-xs font-display font-bold text-white/40 uppercase tracking-widest">Power Statistics</h3>
-            <div className="grid grid-cols-2 gap-4">
-              <div className="space-y-1">
-                <p className="text-[10px] text-white/20 uppercase">Voltage</p>
-                <p className="text-sm font-display font-bold text-white">3.85 V</p>
-              </div>
-              <div className="space-y-1">
-                <p className="text-[10px] text-white/20 uppercase">Temperature</p>
-                <p className="text-sm font-display font-bold text-neon-orange">32.4°C</p>
-              </div>
-              <div className="space-y-1">
-                <p className="text-[10px] text-white/20 uppercase">Capacity</p>
-                <p className="text-sm font-display font-bold text-white">4500 mAh</p>
-              </div>
-              <div className="space-y-1">
-                <p className="text-[10px] text-white/20 uppercase">Technology</p>
-                <p className="text-sm font-display font-bold text-white">Li-ion</p>
-              </div>
-            </div>
-          </Card>
-
-          <div className="space-y-4">
-            <h3 className="text-xs font-display font-bold text-white/40 uppercase tracking-widest">Power Modes</h3>
-            <div className="grid grid-cols-1 gap-3">
-              {[
-                { name: 'Ultra Saving', desc: 'Max battery life, limited performance', icon: ShieldCheck, color: 'text-neon-green' },
-                { name: 'Balanced', desc: 'Optimal for daily usage', icon: Zap, color: 'text-neon-cyan', active: true },
-                { name: 'Performance', desc: 'Max speed for gaming', icon: Play, color: 'text-neon-purple' },
-              ].map((mode) => (
-                <Card key={mode.name} className={cn("flex items-center gap-4", mode.active && "border-neon-cyan/30 bg-neon-cyan/5")}>
-                  <div className={cn("p-2 rounded-xl bg-white/5", mode.color)}>
-                    <mode.icon size={20} />
-                  </div>
-                  <div className="flex-1">
-                    <p className="text-sm font-display font-bold">{mode.name}</p>
-                    <p className="text-[10px] text-white/40 uppercase">{mode.desc}</p>
-                  </div>
-                  {mode.active && <div className="w-2 h-2 rounded-full bg-neon-cyan neon-glow-cyan" />}
-                </Card>
-              ))}
-            </div>
-          </div>
-        </div>
-      );
       case 'cooler': return (
-        <div className="px-6 space-y-6 pb-24">
-          <div className="flex flex-col items-center justify-center py-10 text-center">
-            <Thermometer size={80} className="text-neon-orange mb-4 drop-shadow-[0_0_15px_rgba(255,107,0,0.4)]" />
-            <h2 className="text-4xl font-display font-black mb-1 text-white">38°C</h2>
-            <p className="text-neon-orange uppercase tracking-widest text-[10px] font-bold">CPU Status: Normal</p>
+        <div className="px-6 space-y-8 pb-32">
+          <div className="flex flex-col items-center justify-center py-12 text-center">
+            <div className="relative w-48 h-48 mb-8 flex items-center justify-center">
+              <motion.div 
+                className="absolute inset-0 bg-neon-cyan/5 rounded-full blur-3xl"
+                animate={{ scale: [1, 1.3, 1], opacity: [0.2, 0.4, 0.2] }}
+                transition={{ duration: 5, repeat: Infinity }}
+              />
+              <div className="relative z-10 flex flex-col items-center">
+                <Thermometer size={80} className="text-neon-cyan mb-4 drop-shadow-[0_0_20px_rgba(0,245,255,0.4)]" />
+                <motion.span 
+                  initial={{ opacity: 0 }}
+                  animate={{ opacity: 1 }}
+                  className="text-5xl font-display font-black text-white"
+                >
+                  34°C
+                </motion.span>
+              </div>
+              <motion.div 
+                className="absolute inset-0 rounded-full border border-neon-cyan/20"
+                animate={{ rotate: 360 }}
+                transition={{ duration: 10, repeat: Infinity, ease: "linear" }}
+              />
+              <motion.div 
+                className="absolute inset-4 rounded-full border border-dashed border-neon-cyan/10"
+                animate={{ rotate: -360 }}
+                transition={{ duration: 15, repeat: Infinity, ease: "linear" }}
+              />
+            </div>
+            <h2 className="text-2xl font-display font-black text-white mb-1">Temperature: Normal</h2>
+            <p className="text-white/30 uppercase tracking-[0.3em] text-[10px] font-bold">CPU is running cool</p>
           </div>
 
-          <Card className="h-48 p-0 overflow-hidden">
-            <div className="p-4 pb-0">
-              <h3 className="text-xs font-display font-bold text-white/40 uppercase tracking-widest">Temp History</h3>
-            </div>
-            <ResponsiveContainer width="100%" height="100%">
-              <AreaChart data={[
-                { time: '12:00', temp: 34 },
-                { time: '12:10', temp: 36 },
-                { time: '12:20', temp: 42 },
-                { time: '12:30', temp: 38 },
-                { time: '12:40', temp: 35 },
-                { time: '12:50', temp: 38 },
-              ]}>
-                <defs>
-                  <linearGradient id="colorTemp" x1="0" y1="0" x2="0" y2="1">
-                    <stop offset="5%" stopColor="#ff6b00" stopOpacity={0.3}/>
-                    <stop offset="95%" stopColor="#ff6b00" stopOpacity={0}/>
-                  </linearGradient>
-                </defs>
-                <Area type="monotone" dataKey="temp" stroke="#ff6b00" fillOpacity={1} fill="url(#colorTemp)" strokeWidth={2} />
-              </AreaChart>
-            </ResponsiveContainer>
-          </Card>
-
-          <button className="w-full py-4 rounded-2xl bg-neon-orange text-white font-display font-bold text-lg tracking-widest uppercase neon-glow-orange active:scale-95 transition-transform">
+          <motion.button 
+            whileHover={{ scale: 1.02 }}
+            whileTap={{ scale: 0.98 }}
+            className="w-full py-5 rounded-2xl bg-neon-cyan text-bg-deep font-display font-bold text-lg tracking-[0.2em] uppercase neon-glow-cyan"
+          >
             Cool Down Now
-          </button>
+          </motion.button>
 
           <div className="space-y-4">
-            <h3 className="text-xs font-display font-bold text-white/40 uppercase tracking-widest">Heat Sources</h3>
+            <h3 className="text-[10px] font-display font-bold text-white/30 uppercase tracking-[0.2em]">Heat Sources</h3>
             <div className="space-y-3">
-              {MOCK_APPS.slice(4, 7).map((app) => (
-                <div key={app.id} className="flex items-center gap-4 p-3 bg-bg-card rounded-xl border border-white/5">
-                  <div className="w-10 h-10 flex items-center justify-center bg-white/5 rounded-lg text-xl">
-                    {app.icon}
+              {[
+                { name: 'System UI', impact: 'Low', icon: Cpu },
+                { name: 'Background Apps', impact: 'Minimal', icon: Layers },
+                { name: 'Display', impact: 'Moderate', icon: Info },
+              ].map((item, i) => (
+                <motion.div 
+                  key={item.name}
+                  initial={{ opacity: 0, y: 10 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  transition={{ delay: i * 0.1 }}
+                  className="flex items-center gap-4 p-4 glass rounded-xl"
+                >
+                  <div className="p-2 rounded-lg bg-white/5 text-neon-cyan">
+                    <item.icon size={18} />
                   </div>
-                  <div className="flex-1">
-                    <p className="text-sm font-display font-bold">{app.name}</p>
-                    <p className="text-[10px] text-white/40 uppercase">High CPU Usage</p>
-                  </div>
-                  <span className="text-xs font-display font-bold text-neon-orange">{(Math.random() * 5 + 35).toFixed(1)}°C</span>
-                </div>
+                  <span className="flex-1 text-sm font-display text-white/60 font-medium">{item.name}</span>
+                  <span className="text-[9px] font-display font-bold uppercase tracking-widest text-neon-cyan">
+                    {item.impact}
+                  </span>
+                </motion.div>
               ))}
             </div>
           </div>
@@ -978,7 +1139,7 @@ export default function App() {
         {renderContent()}
       </motion.div>
 
-      <BottomNav activeTab={activeTab} setActiveTab={setActiveTab} />
+      <BottomNav activeTab={activeTab} onNavigate={navigateTo} />
     </div>
   );
 }
