@@ -32,6 +32,11 @@ import { motion, AnimatePresence } from 'motion/react';
 import { PieChart, Pie, Cell, ResponsiveContainer, AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip } from 'recharts';
 import { cn } from './utils';
 
+import { Device } from '@capacitor/device';
+import { StatusBar, Style } from '@capacitor/status-bar';
+import { SplashScreen } from '@capacitor/splash-screen';
+import { Network } from '@capacitor/network';
+
 // --- Types ---
 type Tab = 'dashboard' | 'cleaner' | 'booster' | 'battery' | 'cooler' | 'storage' | 'apps' | 'network' | 'security' | 'game';
 
@@ -146,7 +151,7 @@ const BottomNav = ({ activeTab, onNavigate }: { activeTab: Tab; onNavigate: (tab
 
 // --- Views ---
 
-const Dashboard = ({ onNavigate, battery }: { onNavigate: (tab: Tab) => void; battery: BatteryStatus | null }) => {
+const Dashboard = ({ onNavigate, battery, deviceInfo }: { onNavigate: (tab: Tab) => void; battery: BatteryStatus | null; deviceInfo: any }) => {
   const [healthScore, setHealthScore] = useState(85);
   const [isBoosting, setIsBoosting] = useState(false);
   const [memory, setMemory] = useState<{ used: number; total: number } | null>(null);
@@ -249,6 +254,23 @@ const Dashboard = ({ onNavigate, battery }: { onNavigate: (tab: Tab) => void; ba
             </div>
           </Card>
         ))}
+      </div>
+
+      {/* Device Info */}
+      <div className="space-y-4">
+        <h2 className="text-[10px] font-display font-bold text-white/30 uppercase tracking-[0.2em]">Device Status</h2>
+        <Card className="flex items-center gap-4 p-4">
+          <div className="p-3 rounded-2xl bg-neon-cyan/10 text-neon-cyan">
+            <Smartphone size={22} />
+          </div>
+          <div className="flex-1">
+            <p className="font-display font-bold text-xs text-white/90">{deviceInfo?.model || 'System Optimizer'}</p>
+            <p className="text-[9px] text-white/30 uppercase tracking-wider">{deviceInfo?.operatingSystem || 'Android'} {deviceInfo?.osVersion || 'v1.0'}</p>
+          </div>
+          <div className="text-right">
+            <p className="text-[10px] font-display font-bold text-neon-green uppercase tracking-widest">Optimized</p>
+          </div>
+        </Card>
       </div>
 
       {/* Quick Actions Grid */}
@@ -497,7 +519,7 @@ const RAMBooster = () => {
   );
 };
 
-const NetworkSpeed = () => {
+const NetworkSpeed = ({ networkStatus }: { networkStatus: any }) => {
   const [isTesting, setIsTesting] = useState(false);
   const [speed, setSpeed] = useState<number | null>(null);
   const [ping, setPing] = useState<number | null>(null);
@@ -564,9 +586,9 @@ const NetworkSpeed = () => {
         <h3 className="text-[10px] font-display font-bold text-white/30 uppercase tracking-[0.2em]">Network Info</h3>
         <Card className="space-y-4 p-5">
           {[
-            { label: 'Connection', val: '4G / WiFi', color: 'text-neon-green' },
-            { label: 'IP Address', val: '192.168.1.104', color: 'text-white/80' },
-            { label: 'Security', val: 'WPA3 Secure', color: 'text-neon-green' }
+            { label: 'Connection', val: networkStatus?.connectionType?.toUpperCase() || '4G / WIFI', color: 'text-neon-green' },
+            { label: 'Status', val: networkStatus?.connected ? 'ONLINE' : 'OFFLINE', color: networkStatus?.connected ? 'text-neon-green' : 'text-neon-red' },
+            { label: 'Security', val: 'WPA3 SECURE', color: 'text-neon-green' }
           ].map((info) => (
             <div key={info.label} className="flex justify-between items-center">
               <span className="text-xs text-white/40 uppercase tracking-wider font-bold">{info.label}</span>
@@ -693,8 +715,39 @@ export default function App() {
   const [viewStack, setViewStack] = useState<Tab[]>(['dashboard']);
   const [isSplash, setIsSplash] = useState(true);
   const [battery, setBattery] = useState<BatteryStatus | null>(null);
+  const [deviceInfo, setDeviceInfo] = useState<any>(null);
+  const [networkStatus, setNetworkStatus] = useState<any>(null);
 
   useEffect(() => {
+    // Initialize Capacitor features
+    const initCapacitor = async () => {
+      try {
+        // Hide native splash screen
+        await SplashScreen.hide();
+        
+        // Style status bar
+        await StatusBar.setStyle({ style: Style.Dark });
+        await StatusBar.setBackgroundColor({ color: '#050508' });
+
+        // Get device info
+        const info = await Device.getInfo();
+        setDeviceInfo(info);
+
+        // Get network status
+        const status = await Network.getStatus();
+        setNetworkStatus(status);
+
+        // Listen for network changes
+        Network.addListener('networkStatusChange', status => {
+          setNetworkStatus(status);
+        });
+      } catch (e) {
+        console.warn("Capacitor plugins not available or blocked:", e);
+      }
+    };
+    
+    initCapacitor();
+
     // Real Battery Data
     const initBattery = async () => {
       try {
@@ -793,10 +846,10 @@ export default function App() {
 
   const renderContent = () => {
     switch (activeTab) {
-      case 'dashboard': return <Dashboard onNavigate={navigateTo} battery={battery} />;
+      case 'dashboard': return <Dashboard onNavigate={navigateTo} battery={battery} deviceInfo={deviceInfo} />;
       case 'cleaner': return <JunkCleaner />;
       case 'booster': return <RAMBooster />;
-      case 'network': return <NetworkSpeed />;
+      case 'network': return <NetworkSpeed networkStatus={networkStatus} />;
       case 'security': return <SecurityScan />;
       case 'game': return (
         <div className="px-6 space-y-8 pb-32">
@@ -1118,7 +1171,7 @@ export default function App() {
           </div>
         </div>
       );
-      default: return <Dashboard onNavigate={navigateTo} battery={battery} />;
+      default: return <Dashboard onNavigate={navigateTo} battery={battery} deviceInfo={deviceInfo} />;
     }
   };
 
