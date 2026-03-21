@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react';
+import React, { useState, useEffect, useCallback, useMemo, useRef, ErrorInfo, ReactNode } from 'react';
 import { 
   Zap, 
   Trash2, 
@@ -41,10 +41,54 @@ import {
   Star
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
-import { PieChart, Pie, Cell, ResponsiveContainer, AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip } from 'recharts';
 import Confetti from 'react-confetti';
 import { useWindowSize } from 'react-use';
 import { cn } from './utils';
+
+// --- Error Boundary ---
+interface ErrorBoundaryProps {
+  children: ReactNode;
+}
+
+interface ErrorBoundaryState {
+  hasError: boolean;
+}
+
+class ErrorBoundary extends (React.Component as any) {
+  constructor(props: any) {
+    super(props);
+    this.state = { hasError: false };
+  }
+
+  static getDerivedStateFromError(_: any) {
+    return { hasError: true };
+  }
+
+  componentDidCatch(error: any, errorInfo: any) {
+    console.error("App Error:", error, errorInfo);
+  }
+
+  render() {
+    if (this.state.hasError) {
+      return (
+        <div className="min-h-screen bg-bg-deep flex flex-col items-center justify-center p-6 text-center">
+          <div className="p-6 rounded-3xl bg-white/5 border border-white/10 space-y-4">
+            <AlertTriangle size={48} className="text-neon-red mx-auto" />
+            <h1 className="text-xl font-display font-bold text-white uppercase">Something went wrong</h1>
+            <p className="text-sm text-white/40">The app encountered an error. Please try refreshing.</p>
+            <button 
+              onClick={() => window.location.reload()}
+              className="px-6 py-3 rounded-xl bg-neon-cyan text-bg-deep font-bold uppercase text-xs"
+            >
+              Refresh App
+            </button>
+          </div>
+        </div>
+      );
+    }
+    return this.props.children;
+  }
+}
 
 // --- Types ---
 type Tab = 'dashboard' | 'gfx' | 'sensitivity' | 'crosshair' | 'booster' | 'cleaner' | 'battery' | 'cooler' | 'apps' | 'network' | 'settings';
@@ -215,6 +259,24 @@ const OptionGrid = ({ options, selected, onSelect, label }: { options: string[];
       ))}
     </div>
   </div>
+);
+
+const NavButton = ({ icon: Icon, active, onClick }: { icon: any; active: boolean; onClick: () => void }) => (
+  <button 
+    onClick={onClick}
+    className={cn(
+      "p-3 rounded-2xl transition-all duration-300 relative group",
+      active ? "text-neon-cyan" : "text-white/20 hover:text-white/40"
+    )}
+  >
+    <Icon size={24} />
+    {active && (
+      <motion.div 
+        layoutId="nav-glow"
+        className="absolute inset-0 bg-neon-cyan/10 blur-xl rounded-full"
+      />
+    )}
+  </button>
 );
 
 // --- Main App ---
@@ -663,8 +725,17 @@ export default function App() {
   );
 
   return (
-    <div className="min-h-screen bg-bg-deep text-white font-sans relative">
-      {showConfetti && <Confetti width={width} height={height} recycle={false} numberOfPieces={200} colors={['#00f5ff', '#bf00ff', '#00ff88']} />}
+    <ErrorBoundary>
+      <div className="min-h-screen bg-bg-deep text-white font-sans relative">
+        {showConfetti && width > 0 && height > 0 && (
+          <Confetti 
+            width={width} 
+            height={height} 
+            recycle={false} 
+            numberOfPieces={200} 
+            colors={['#00f5ff', '#bf00ff', '#00ff88']} 
+          />
+        )}
       
       {/* Background Effects */}
       <div className="fixed inset-0 pointer-events-none overflow-hidden">
@@ -754,23 +825,6 @@ export default function App() {
         </div>
       </nav>
     </div>
-  );
-}
-
-const NavButton = ({ icon: Icon, active, onClick }: { icon: any; active: boolean; onClick: () => void }) => (
-  <button 
-    onClick={onClick}
-    className={cn(
-      "p-3 rounded-2xl transition-all duration-300 relative group",
-      active ? "text-neon-cyan" : "text-white/20 hover:text-white/40"
-    )}
-  >
-    <Icon size={24} />
-    {active && (
-      <motion.div 
-        layoutId="nav-glow"
-        className="absolute inset-0 bg-neon-cyan/10 blur-xl rounded-full"
-      />
-    )}
-  </button>
+  </ErrorBoundary>
 );
+}

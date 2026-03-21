@@ -21,14 +21,15 @@ workflows:
           cd android
           # Fix for corrupt gradle-wrapper.jar
           rm -f gradle/wrapper/gradle-wrapper.jar
-          gradle wrapper --gradle-version 8.14.3
+          gradle wrapper --gradle-version 8.10.2
           chmod +x gradlew
       - name: Build Android APK & AAB
         script: |
           cd android
-          ./gradlew clean assembleRelease # Build APK
+          ./gradlew clean assembleDebug assembleRelease # Build both Debug and Release APKs
           ./gradlew bundleRelease   # Build AAB (App Bundle)
     artifacts:
+      - android/app/build/outputs/apk/debug/*.apk
       - android/app/build/outputs/apk/release/*.apk
       - android/app/build/outputs/bundle/release/*.aab
 
