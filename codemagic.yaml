@@ -5,28 +5,27 @@ workflows:
     instance_type: mac_mini_m1
     environment:
       groups:
-        - keystore_credentials
+        - keystore_credentials # Define your keystore variables in Codemagic UI
       node: latest
+      java: 17
     scripts:
       - name: Install dependencies
         script: |
-          npm install
+          npm install --legacy-peer-deps
       - name: Build web assets
         script: |
           npm run build
-      - name: Capacitor Setup
+      - name: Capacitor Sync
         script: |
-          if [ ! -d "android" ]; then
-            npx cap add android
-          fi
-          # Fix for corrupt gradle-wrapper.jar
-          cd android && gradle wrapper && chmod +x gradlew && cd ..
-          npx cap sync
-      - name: Build Android APK
+          npx cap sync android
+      - name: Build Android APK & AAB
         script: |
-          cd android && ./gradlew assembleRelease
+          cd android
+          ./gradlew assembleRelease # Build APK
+          ./gradlew bundleRelease   # Build AAB (App Bundle)
     artifacts:
       - android/app/build/outputs/apk/release/*.apk
+      - android/app/build/outputs/bundle/release/*.aab
 
   ios-workflow:
     name: iOS Build
@@ -34,25 +33,27 @@ workflows:
     instance_type: mac_mini_m1
     environment:
       groups:
-        - apple_credentials
+        - apple_credentials # Define your Apple certificates in Codemagic UI
       node: latest
       xcode: latest
       cocoapods: default
     scripts:
       - name: Install dependencies
         script: |
-          npm install
+          npm install --legacy-peer-deps
       - name: Build web assets
         script: |
           npm run build
-      - name: Capacitor Setup
+      - name: Capacitor Sync
         script: |
-          if [ ! -d "ios" ]; then
-            npx cap add ios
-          fi
-          npx cap sync
+          npx cap sync ios
+      - name: Install CocoaPods
+        script: |
+          cd ios/App && pod install
       - name: Build iOS App
         script: |
-          cd ios/App && xcodebuild -workspace App.xcworkspace -scheme App -configuration Release archive -archivePath $CM_BUILD_DIR/App.xcarchive
+          cd ios/App
+          xcodebuild -workspace App.xcworkspace -scheme App -configuration Release archive -archivePath $CM_BUILD_DIR/App.xcarchive -allowProvisioningUpdates
     artifacts:
       - $CM_BUILD_DIR/App.xcarchive
+      - ios/App/*.ipa # If you have code signing configured
