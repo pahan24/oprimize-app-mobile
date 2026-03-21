@@ -32,7 +32,7 @@ import { PieChart, Pie, Cell, ResponsiveContainer, AreaChart, Area, XAxis, YAxis
 import { cn } from './utils';
 
 // --- Types ---
-type Tab = 'dashboard' | 'cleaner' | 'booster' | 'battery' | 'cooler' | 'storage' | 'apps' | 'network' | 'security';
+type Tab = 'dashboard' | 'cleaner' | 'booster' | 'battery' | 'cooler' | 'storage' | 'apps' | 'network' | 'security' | 'game';
 
 interface AppInfo {
   id: string;
@@ -121,30 +121,12 @@ const BottomNav = ({ activeTab, setActiveTab }: { activeTab: Tab; setActiveTab: 
 
 // --- Views ---
 
-const Dashboard = ({ onNavigate }: { onNavigate: (tab: Tab) => void }) => {
+const Dashboard = ({ onNavigate, battery }: { onNavigate: (tab: Tab) => void; battery: BatteryStatus | null }) => {
   const [healthScore, setHealthScore] = useState(85);
   const [isBoosting, setIsBoosting] = useState(false);
-  const [battery, setBattery] = useState<BatteryStatus | null>(null);
   const [memory, setMemory] = useState<{ used: number; total: number } | null>(null);
 
   useEffect(() => {
-    // Real Battery Data
-    if ('getBattery' in navigator) {
-      (navigator as any).getBattery().then((batt: any) => {
-        const updateBattery = () => {
-          setBattery({
-            level: Math.round(batt.level * 100),
-            charging: batt.charging,
-            chargingTime: batt.chargingTime,
-            dischargingTime: batt.dischargingTime
-          });
-        };
-        updateBattery();
-        batt.addEventListener('levelchange', updateBattery);
-        batt.addEventListener('chargingchange', updateBattery);
-      });
-    }
-
     // Real Memory Data (Chrome only)
     const updateMemory = () => {
       if ((performance as any).memory) {
@@ -268,6 +250,15 @@ const Dashboard = ({ onNavigate }: { onNavigate: (tab: Tab) => void }) => {
             <div>
               <p className="font-display font-bold text-sm">App Manager</p>
               <p className="text-[10px] text-white/40 uppercase">8 Apps</p>
+            </div>
+          </Card>
+          <Card className="flex items-center gap-4" onClick={() => onNavigate('game')}>
+            <div className="p-3 rounded-2xl bg-neon-purple/10 text-neon-purple">
+              <Play size={24} />
+            </div>
+            <div>
+              <p className="font-display font-bold text-sm">Game Boost</p>
+              <p className="text-[10px] text-white/40 uppercase">3 Games</p>
             </div>
           </Card>
         </div>
@@ -630,6 +621,30 @@ const SecurityScan = () => {
 export default function App() {
   const [activeTab, setActiveTab] = useState<Tab>('dashboard');
   const [viewStack, setViewStack] = useState<Tab[]>(['dashboard']);
+  const [isSplash, setIsSplash] = useState(true);
+  const [battery, setBattery] = useState<BatteryStatus | null>(null);
+
+  useEffect(() => {
+    // Real Battery Data
+    if ('getBattery' in navigator) {
+      (navigator as any).getBattery().then((batt: any) => {
+        const updateBattery = () => {
+          setBattery({
+            level: Math.round(batt.level * 100),
+            charging: batt.charging,
+            chargingTime: batt.chargingTime,
+            dischargingTime: batt.dischargingTime
+          });
+        };
+        updateBattery();
+        batt.addEventListener('levelchange', updateBattery);
+        batt.addEventListener('chargingchange', updateBattery);
+      });
+    }
+
+    const timer = setTimeout(() => setIsSplash(false), 2500);
+    return () => clearTimeout(timer);
+  }, []);
 
   const navigateTo = (tab: Tab) => {
     setActiveTab(tab);
@@ -648,13 +663,106 @@ export default function App() {
     }
   };
 
+  if (isSplash) {
+    return (
+      <div className="min-h-screen bg-bg-deep flex flex-col items-center justify-center p-6 text-center">
+        <motion.div
+          initial={{ scale: 0.5, opacity: 0 }}
+          animate={{ scale: 1, opacity: 1 }}
+          transition={{ duration: 0.8, ease: "easeOut" }}
+          className="relative"
+        >
+          <div className="w-32 h-32 rounded-3xl bg-neon-cyan/10 flex items-center justify-center mb-6 relative overflow-hidden border border-neon-cyan/20">
+            <Zap size={64} className="text-neon-cyan drop-shadow-[0_0_15px_rgba(0,245,255,0.8)]" />
+            <motion.div 
+              className="absolute inset-0 bg-gradient-to-tr from-neon-cyan/20 to-transparent"
+              animate={{ opacity: [0.2, 0.5, 0.2] }}
+              transition={{ duration: 2, repeat: Infinity }}
+            />
+          </div>
+        </motion.div>
+        <motion.h1 
+          initial={{ y: 20, opacity: 0 }}
+          animate={{ y: 0, opacity: 1 }}
+          transition={{ delay: 0.5 }}
+          className="text-3xl font-display font-black text-white tracking-tighter uppercase"
+        >
+          Ultra <span className="text-neon-cyan">Optimize</span> X
+        </motion.h1>
+        <motion.p 
+          initial={{ opacity: 0 }}
+          animate={{ opacity: 1 }}
+          transition={{ delay: 1 }}
+          className="text-white/40 text-xs font-display tracking-[0.3em] uppercase mt-2"
+        >
+          Powered by AI Engine
+        </motion.p>
+        
+        <div className="absolute bottom-12 left-0 right-0 px-12">
+          <div className="w-full h-1 bg-white/5 rounded-full overflow-hidden">
+            <motion.div 
+              className="h-full bg-neon-cyan"
+              initial={{ width: '0%' }}
+              animate={{ width: '100%' }}
+              transition={{ duration: 2.2, ease: "easeInOut" }}
+            />
+          </div>
+        </div>
+      </div>
+    );
+  }
+
   const renderContent = () => {
     switch (activeTab) {
-      case 'dashboard': return <Dashboard onNavigate={navigateTo} />;
+      case 'dashboard': return <Dashboard onNavigate={navigateTo} battery={battery} />;
       case 'cleaner': return <JunkCleaner />;
       case 'booster': return <RAMBooster />;
       case 'network': return <NetworkSpeed />;
       case 'security': return <SecurityScan />;
+      case 'game': return (
+        <div className="px-6 space-y-6 pb-24">
+          <div className="flex flex-col items-center justify-center py-10 text-center">
+            <Play size={80} className="text-neon-green mb-4 drop-shadow-[0_0_15px_rgba(0,255,136,0.4)]" />
+            <h2 className="text-3xl font-display font-black mb-1 text-white">Game Booster</h2>
+            <p className="text-white/40 uppercase tracking-widest text-[10px] font-bold">Optimize for Gaming</p>
+          </div>
+
+          <Card className="flex items-center justify-between">
+            <div className="flex items-center gap-3">
+              <div className="p-2 rounded-lg bg-neon-cyan/10 text-neon-cyan">
+                <ShieldAlert size={18} />
+              </div>
+              <div>
+                <p className="text-sm font-display font-bold">Do Not Disturb</p>
+                <p className="text-[10px] text-white/40 uppercase">Block notifications</p>
+              </div>
+            </div>
+            <div className="w-10 h-5 bg-neon-cyan/20 rounded-full relative">
+              <div className="absolute right-1 top-1 w-3 h-3 bg-neon-cyan rounded-full" />
+            </div>
+          </Card>
+
+          <div className="space-y-4">
+            <h3 className="text-xs font-display font-bold text-white/40 uppercase tracking-widest">Installed Games</h3>
+            <div className="grid grid-cols-1 gap-3">
+              {MOCK_APPS.filter(app => app.isGame).map((game) => (
+                <Card key={game.id} className="flex items-center gap-4">
+                  <div className="w-12 h-12 flex items-center justify-center bg-white/5 rounded-xl text-2xl">
+                    {game.icon}
+                  </div>
+                  <div className="flex-1">
+                    <p className="font-display font-bold">{game.name}</p>
+                    <p className="text-[10px] text-white/40 uppercase">Optimized</p>
+                  </div>
+                  <button className="px-4 py-2 rounded-lg bg-neon-green text-bg-deep font-display font-bold text-[10px] uppercase">
+                    Launch
+                  </button>
+                </Card>
+              ))}
+            </div>
+          </div>
+        </div>
+      );
       case 'apps': return (
         <div className="px-6 space-y-6 pb-24">
           <div className="relative">
@@ -726,37 +834,114 @@ export default function App() {
         </div>
       );
       case 'battery': return (
-        <div className="px-6 flex flex-col items-center justify-center py-20 text-center pb-24">
-          <BatteryIcon size={80} className="text-neon-green mb-6" />
-          <h2 className="text-3xl font-display font-black mb-2">78%</h2>
-          <p className="text-white/40 uppercase tracking-widest text-xs mb-8">Battery Health: Good</p>
-          <div className="grid grid-cols-1 w-full gap-4">
-            <Card className="flex items-center justify-between">
-              <span className="font-display font-bold">Ultra Saving Mode</span>
-              <div className="w-10 h-5 bg-white/10 rounded-full relative">
-                <div className="absolute left-1 top-1 w-3 h-3 bg-white/20 rounded-full" />
+        <div className="px-6 space-y-6 pb-24">
+          <div className="flex flex-col items-center justify-center py-10 text-center">
+            <BatteryIcon size={80} className="text-neon-green mb-4 drop-shadow-[0_0_15px_rgba(0,255,136,0.4)]" />
+            <h2 className="text-4xl font-display font-black mb-1 text-white">{battery ? `${battery.level}%` : '78%'}</h2>
+            <p className="text-neon-green uppercase tracking-widest text-[10px] font-bold">Battery Health: Excellent</p>
+          </div>
+
+          <Card className="space-y-4">
+            <h3 className="text-xs font-display font-bold text-white/40 uppercase tracking-widest">Power Statistics</h3>
+            <div className="grid grid-cols-2 gap-4">
+              <div className="space-y-1">
+                <p className="text-[10px] text-white/20 uppercase">Voltage</p>
+                <p className="text-sm font-display font-bold text-white">3.85 V</p>
               </div>
-            </Card>
-            <Card className="flex items-center justify-between">
-              <span className="font-display font-bold">Smart Optimization</span>
-              <div className="w-10 h-5 bg-neon-green/20 rounded-full relative">
-                <div className="absolute right-1 top-1 w-3 h-3 bg-neon-green rounded-full" />
+              <div className="space-y-1">
+                <p className="text-[10px] text-white/20 uppercase">Temperature</p>
+                <p className="text-sm font-display font-bold text-neon-orange">32.4°C</p>
               </div>
-            </Card>
+              <div className="space-y-1">
+                <p className="text-[10px] text-white/20 uppercase">Capacity</p>
+                <p className="text-sm font-display font-bold text-white">4500 mAh</p>
+              </div>
+              <div className="space-y-1">
+                <p className="text-[10px] text-white/20 uppercase">Technology</p>
+                <p className="text-sm font-display font-bold text-white">Li-ion</p>
+              </div>
+            </div>
+          </Card>
+
+          <div className="space-y-4">
+            <h3 className="text-xs font-display font-bold text-white/40 uppercase tracking-widest">Power Modes</h3>
+            <div className="grid grid-cols-1 gap-3">
+              {[
+                { name: 'Ultra Saving', desc: 'Max battery life, limited performance', icon: ShieldCheck, color: 'text-neon-green' },
+                { name: 'Balanced', desc: 'Optimal for daily usage', icon: Zap, color: 'text-neon-cyan', active: true },
+                { name: 'Performance', desc: 'Max speed for gaming', icon: Play, color: 'text-neon-purple' },
+              ].map((mode) => (
+                <Card key={mode.name} className={cn("flex items-center gap-4", mode.active && "border-neon-cyan/30 bg-neon-cyan/5")}>
+                  <div className={cn("p-2 rounded-xl bg-white/5", mode.color)}>
+                    <mode.icon size={20} />
+                  </div>
+                  <div className="flex-1">
+                    <p className="text-sm font-display font-bold">{mode.name}</p>
+                    <p className="text-[10px] text-white/40 uppercase">{mode.desc}</p>
+                  </div>
+                  {mode.active && <div className="w-2 h-2 rounded-full bg-neon-cyan neon-glow-cyan" />}
+                </Card>
+              ))}
+            </div>
           </div>
         </div>
       );
       case 'cooler': return (
-        <div className="px-6 flex flex-col items-center justify-center py-20 text-center pb-24">
-          <Thermometer size={80} className="text-neon-orange mb-6" />
-          <h2 className="text-3xl font-display font-black mb-2">38°C</h2>
-          <p className="text-white/40 uppercase tracking-widest text-xs mb-8">CPU Status: Normal</p>
-          <button className="w-full py-4 rounded-2xl bg-neon-orange text-white font-display font-bold text-lg tracking-widest uppercase neon-glow-orange">
-            Cool Down
+        <div className="px-6 space-y-6 pb-24">
+          <div className="flex flex-col items-center justify-center py-10 text-center">
+            <Thermometer size={80} className="text-neon-orange mb-4 drop-shadow-[0_0_15px_rgba(255,107,0,0.4)]" />
+            <h2 className="text-4xl font-display font-black mb-1 text-white">38°C</h2>
+            <p className="text-neon-orange uppercase tracking-widest text-[10px] font-bold">CPU Status: Normal</p>
+          </div>
+
+          <Card className="h-48 p-0 overflow-hidden">
+            <div className="p-4 pb-0">
+              <h3 className="text-xs font-display font-bold text-white/40 uppercase tracking-widest">Temp History</h3>
+            </div>
+            <ResponsiveContainer width="100%" height="100%">
+              <AreaChart data={[
+                { time: '12:00', temp: 34 },
+                { time: '12:10', temp: 36 },
+                { time: '12:20', temp: 42 },
+                { time: '12:30', temp: 38 },
+                { time: '12:40', temp: 35 },
+                { time: '12:50', temp: 38 },
+              ]}>
+                <defs>
+                  <linearGradient id="colorTemp" x1="0" y1="0" x2="0" y2="1">
+                    <stop offset="5%" stopColor="#ff6b00" stopOpacity={0.3}/>
+                    <stop offset="95%" stopColor="#ff6b00" stopOpacity={0}/>
+                  </linearGradient>
+                </defs>
+                <Area type="monotone" dataKey="temp" stroke="#ff6b00" fillOpacity={1} fill="url(#colorTemp)" strokeWidth={2} />
+              </AreaChart>
+            </ResponsiveContainer>
+          </Card>
+
+          <button className="w-full py-4 rounded-2xl bg-neon-orange text-white font-display font-bold text-lg tracking-widest uppercase neon-glow-orange active:scale-95 transition-transform">
+            Cool Down Now
           </button>
+
+          <div className="space-y-4">
+            <h3 className="text-xs font-display font-bold text-white/40 uppercase tracking-widest">Heat Sources</h3>
+            <div className="space-y-3">
+              {MOCK_APPS.slice(4, 7).map((app) => (
+                <div key={app.id} className="flex items-center gap-4 p-3 bg-bg-card rounded-xl border border-white/5">
+                  <div className="w-10 h-10 flex items-center justify-center bg-white/5 rounded-lg text-xl">
+                    {app.icon}
+                  </div>
+                  <div className="flex-1">
+                    <p className="text-sm font-display font-bold">{app.name}</p>
+                    <p className="text-[10px] text-white/40 uppercase">High CPU Usage</p>
+                  </div>
+                  <span className="text-xs font-display font-bold text-neon-orange">{(Math.random() * 5 + 35).toFixed(1)}°C</span>
+                </div>
+              ))}
+            </div>
+          </div>
         </div>
       );
-      default: return <Dashboard onNavigate={navigateTo} />;
+      default: return <Dashboard onNavigate={navigateTo} battery={battery} />;
     }
   };
 
@@ -771,6 +956,7 @@ export default function App() {
       case 'cooler': return 'CPU Cooler';
       case 'network': return 'Network Speed';
       case 'security': return 'Security Center';
+      case 'game': return 'Game Booster';
       default: return 'Ultra Optimize X';
     }
   };

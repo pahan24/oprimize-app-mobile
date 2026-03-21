@@ -1,0 +1,17 @@
+{
+  "name": "Ultra Optimize X",
+  "short_name": "OptimizeX",
+  "start_url": ".",
+  "display": "standalone",
+  "background_color": "#050508",
+  "theme_color": "#00f5ff",
+  "description": "Professional Mobile Optimizer with Neon Gaming UI",
+  "icons": [
+    {
+      "src": "https://cdn-icons-png.flaticon.com/512/3132/3132715.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any maskable"
+    }
+  ]
+}
