@@ -30,6 +30,7 @@
 
 .glass {
   @apply backdrop-blur-xl border border-white/5 bg-bg-glass;
+  -webkit-backdrop-filter: blur(24px);
 }
 
 .neon-glow-cyan {
