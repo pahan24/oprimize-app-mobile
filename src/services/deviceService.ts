@@ -57,8 +57,24 @@ export class DeviceService {
     return 45 + Math.random() * 15;
   }
 
-  // Simulate CPU temp (no direct web API for this)
+  // Simulate CPU usage with one decimal place
+  static getCpuUsage(): number {
+    const usage = 15 + Math.random() * 45;
+    return parseFloat(usage.toFixed(1));
+  }
+
+  // Simulate CPU temperature
   static getCpuTemp(): number {
-    return 35 + Math.random() * 10;
+    return Math.round(35 + Math.random() * 15);
+  }
+
+  // Simulate Junk files found
+  static getJunkSize(): string {
+    return (1.2 + Math.random() * 3.5).toFixed(1) + ' GB';
+  }
+
+  // Simulate optimization actions
+  static async performAction(name: string, duration: number = 3000): Promise<void> {
+    return new Promise(resolve => setTimeout(resolve, duration));
   }
 }

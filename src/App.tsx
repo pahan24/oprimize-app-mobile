@@ -43,7 +43,23 @@ import {
   Database,
   Wifi as WifiIcon,
   Battery as BatteryIcon,
-  Smartphone as PhoneIcon
+  Smartphone as PhoneIcon,
+  Globe,
+  Image as ImageIcon,
+  Music as MusicIcon,
+  Users,
+  Download,
+  Loader2,
+  ExternalLink,
+  Plus,
+  Minus,
+  Maximize2,
+  Minimize2,
+  Palette as PaletteIcon,
+  Moon,
+  Sun,
+  Eye,
+  EyeOff
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import Confetti from 'react-confetti';
@@ -100,7 +116,7 @@ class ErrorBoundary extends (React.Component as any) {
 }
 
 // --- Types ---
-type Tab = 'dashboard' | 'gfx' | 'sensitivity' | 'crosshair' | 'booster' | 'cleaner' | 'battery' | 'cooler' | 'apps' | 'network' | 'settings';
+type Tab = 'dashboard' | 'gfx' | 'sensitivity' | 'crosshair' | 'booster' | 'cleaner' | 'battery' | 'cooler' | 'apps' | 'network' | 'settings' | 'browser' | 'editor' | 'music' | 'social';
 
 interface AppInfo {
   id: string;
@@ -288,6 +304,52 @@ const NavButton = ({ icon: Icon, active, onClick }: { icon: any; active: boolean
   </button>
 );
 
+const CrosshairOverlay = ({ settings, enabled }: { settings: CrosshairSettings; enabled: boolean }) => {
+  if (!enabled) return null;
+
+  const renderCrosshair = () => {
+    switch (settings.type) {
+      case 'Dot':
+        return <div className="rounded-full" style={{ width: settings.size, height: settings.size, backgroundColor: settings.color, opacity: settings.opacity / 100 }} />;
+      case 'Classic':
+        return (
+          <div className="relative flex items-center justify-center">
+            <div className="absolute bg-current" style={{ width: settings.size * 2, height: settings.thickness, backgroundColor: settings.color, opacity: settings.opacity / 100 }} />
+            <div className="absolute bg-current" style={{ width: settings.thickness, height: settings.size * 2, backgroundColor: settings.color, opacity: settings.opacity / 100 }} />
+          </div>
+        );
+      case 'Circle':
+        return (
+          <div className="rounded-full border" style={{ 
+            width: settings.size * 2, 
+            height: settings.size * 2, 
+            borderColor: settings.color, 
+            borderWidth: settings.thickness,
+            opacity: settings.opacity / 100 
+          }} />
+        );
+      case 'Square':
+        return (
+          <div className="border" style={{ 
+            width: settings.size * 2, 
+            height: settings.size * 2, 
+            borderColor: settings.color, 
+            borderWidth: settings.thickness,
+            opacity: settings.opacity / 100 
+          }} />
+        );
+      default:
+        return <div className="w-1 h-1 bg-white rounded-full" />;
+    }
+  };
+
+  return (
+    <div className="fixed inset-0 pointer-events-none z-[9999] flex items-center justify-center">
+      {renderCrosshair()}
+    </div>
+  );
+};
+
 // --- Main App ---
 
 export default function App() {
@@ -302,12 +364,19 @@ export default function App() {
   // Stats
   const [ramUsage, setRamUsage] = useState(64);
   const [cpuTemp, setCpuTemp] = useState(42);
+  const [cpuUsage, setCpuUsage] = useState(24.5);
   const [batteryLevel, setBatteryLevel] = useState(85);
   const [isCharging, setIsCharging] = useState(false);
   const [ping, setPing] = useState(45);
   const [networkType, setNetworkType] = useState('WIFI');
   const [deviceModel, setDeviceModel] = useState('Unknown Device');
   const [platform, setPlatform] = useState('android');
+
+  // New settings
+  const [crosshairEnabled, setCrosshairEnabled] = useState(false);
+  const [themeColor, setThemeColor] = useState('cyan'); 
+  const [downloadingApp, setDownloadingApp] = useState<string | null>(null);
+  const [downloadProgress, setDownloadProgress] = useState(0);
 
   // GFX Settings
   const [gfx, setGfx] = useState<GFXSettings>({
@@ -398,6 +467,7 @@ export default function App() {
     const statsInterval = setInterval(async () => {
       setRamUsage(DeviceService.getRamUsage());
       setCpuTemp(DeviceService.getCpuTemp());
+      setCpuUsage(DeviceService.getCpuUsage());
       const network = await DeviceService.getNetworkStatus();
       setPing(await DeviceService.getPing(network));
       setNetworkType(network.connectionType.toUpperCase());
@@ -436,12 +506,30 @@ export default function App() {
     setTimeout(() => {
       setRamUsage(42);
       setCpuTemp(36);
+      setCpuUsage(18.2);
       setPing(24);
       setIsOptimizing(false);
       setShowConfetti(true);
       setTimeout(() => setShowConfetti(false), 5000);
     }, 3000);
   }, []);
+
+  const handleDownload = (appId: string) => {
+    setDownloadingApp(appId);
+    setDownloadProgress(0);
+    const interval = setInterval(() => {
+      setDownloadProgress(prev => {
+        if (prev >= 100) {
+          clearInterval(interval);
+          setDownloadingApp(null);
+          setShowConfetti(true);
+          setTimeout(() => setShowConfetti(false), 3000);
+          return 100;
+        }
+        return prev + Math.random() * 15;
+      });
+    }, 500);
+  };
 
   const renderDashboard = () => (
     <div className="space-y-6 p-6 pb-32">
@@ -481,9 +569,9 @@ export default function App() {
             <div className="p-2 rounded-xl bg-neon-cyan/10">
               <Cpu size={20} className="text-neon-cyan" />
             </div>
-            <span className="text-xs font-display font-bold text-neon-cyan">{cpuTemp}°C</span>
+            <span className="text-xs font-display font-bold text-neon-cyan">{cpuUsage}%</span>
           </div>
-          <ProgressBar progress={cpuTemp} colorClass="text-neon-cyan" label="CPU Temp" />
+          <ProgressBar progress={cpuUsage} colorClass="text-neon-cyan" label="CPU Usage" />
         </Card>
         <Card className="flex flex-col gap-4 p-5">
           <div className="flex justify-between items-center">
@@ -493,6 +581,27 @@ export default function App() {
             <span className="text-xs font-display font-bold text-neon-purple">{Math.round(ramUsage)}%</span>
           </div>
           <ProgressBar progress={ramUsage} colorClass="text-neon-purple" label="RAM Usage" />
+        </Card>
+      </div>
+
+      <div className="grid grid-cols-2 gap-4">
+        <Card className="flex flex-col gap-4 p-5">
+          <div className="flex justify-between items-center">
+            <div className="p-2 rounded-xl bg-neon-green/10">
+              <BatteryIcon size={20} className="text-neon-green" />
+            </div>
+            <span className="text-xs font-display font-bold text-neon-green">{batteryLevel}%</span>
+          </div>
+          <ProgressBar progress={batteryLevel} colorClass="text-neon-green" label="Battery" />
+        </Card>
+        <Card className="flex flex-col gap-4 p-5">
+          <div className="flex justify-between items-center">
+            <div className="p-2 rounded-xl bg-neon-orange/10">
+              <Thermometer size={20} className="text-neon-orange" />
+            </div>
+            <span className="text-xs font-display font-bold text-neon-orange">{cpuTemp}°C</span>
+          </div>
+          <ProgressBar progress={(cpuTemp / 100) * 100} colorClass="text-neon-orange" label="CPU Temp" />
         </Card>
       </div>
 
@@ -765,75 +874,212 @@ export default function App() {
           ))}
         </div>
 
-        <h3 className="text-[10px] uppercase tracking-[0.3em] text-white/40 font-bold ml-1 mt-6">Other Apps</h3>
+        <h3 className="text-[10px] uppercase tracking-[0.3em] text-white/40 font-bold ml-1 mt-6">Available to Download</h3>
         <div className="grid grid-cols-1 gap-3">
-          {MOCK_APPS.filter(a => !a.isGame).map(app => (
-            <Card key={app.id} className="flex items-center gap-4 p-4">
-              <div className="w-12 h-12 rounded-2xl bg-white/5 flex items-center justify-center text-2xl">
-                {app.icon}
-              </div>
-              <div className="flex-1">
-                <h4 className="text-sm font-bold text-white">{app.name}</h4>
-                <p className="text-[10px] text-white/40 uppercase tracking-wider">{app.size} • {app.lastUsed}</p>
-              </div>
-              <ChevronRight size={20} className="text-white/20" />
-            </Card>
-          ))}
+          <Card className="flex items-center gap-4 p-4">
+            <div className="w-12 h-12 rounded-2xl bg-white/5 flex items-center justify-center text-2xl">🎮</div>
+            <div className="flex-1">
+              <h4 className="text-sm font-bold text-white">Apex Legends Mobile</h4>
+              <p className="text-[10px] text-white/40 uppercase tracking-wider">2.1 GB • High Performance</p>
+            </div>
+            <motion.button 
+              onClick={() => handleDownload('apex')}
+              disabled={downloadingApp === 'apex'}
+              className="p-2 rounded-xl bg-neon-cyan text-bg-deep"
+            >
+              {downloadingApp === 'apex' ? <Loader2 size={20} className="animate-spin" /> : <Download size={20} />}
+            </motion.button>
+          </Card>
+          {downloadingApp === 'apex' && (
+            <div className="px-4">
+              <ProgressBar progress={Math.round(downloadProgress)} colorClass="text-neon-cyan" label="Downloading..." />
+            </div>
+          )}
+        </div>
+
+        <h3 className="text-[10px] uppercase tracking-[0.3em] text-white/40 font-bold ml-1 mt-6">Mini Apps</h3>
+        <div className="grid grid-cols-2 gap-3">
+          <Card onClick={() => setActiveTab('browser')} className="flex flex-col items-center gap-3 py-6">
+            <Globe size={28} className="text-neon-cyan" />
+            <span className="text-xs font-bold uppercase tracking-widest">Fast Browser</span>
+          </Card>
+          <Card onClick={() => setActiveTab('editor')} className="flex flex-col items-center gap-3 py-6">
+            <ImageIcon size={28} className="text-neon-purple" />
+            <span className="text-xs font-bold uppercase tracking-widest">Photo Editor</span>
+          </Card>
+          <Card onClick={() => setActiveTab('music')} className="flex flex-col items-center gap-3 py-6">
+            <MusicIcon size={28} className="text-neon-green" />
+            <span className="text-xs font-bold uppercase tracking-widest">Music Stream</span>
+          </Card>
+          <Card onClick={() => setActiveTab('social')} className="flex flex-col items-center gap-3 py-6">
+            <Users size={28} className="text-neon-orange" />
+            <span className="text-xs font-bold uppercase tracking-widest">Social Connect</span>
+          </Card>
         </div>
       </div>
+    </div>
+  );
+
+  const renderBrowser = () => (
+    <div className="h-full flex flex-col p-6 space-y-6">
+      <div className="flex items-center gap-4 bg-white/5 p-4 rounded-2xl border border-white/10">
+        <Globe size={20} className="text-neon-cyan" />
+        <input type="text" placeholder="https://google.com" className="bg-transparent border-none outline-none flex-1 text-sm text-white" defaultValue="https://google.com" />
+        <ExternalLink size={18} className="text-white/40" />
+      </div>
+      <div className="flex-1 glass rounded-3xl border border-white/5 flex flex-col items-center justify-center p-12 text-center space-y-4">
+        <div className="w-20 h-20 rounded-full bg-neon-cyan/10 flex items-center justify-center">
+          <ShieldCheck size={40} className="text-neon-cyan" />
+        </div>
+        <h3 className="text-xl font-display font-bold text-white uppercase italic">Secure Browser Active</h3>
+        <p className="text-sm text-white/40">Your connection is encrypted and optimized for low latency gaming.</p>
+        <div className="grid grid-cols-2 gap-3 w-full pt-6">
+          <div className="p-4 rounded-2xl bg-white/5 border border-white/5">
+            <p className="text-[10px] uppercase tracking-widest text-white/40 font-bold">Ad Block</p>
+            <p className="text-sm font-bold text-neon-green">ENABLED</p>
+          </div>
+          <div className="p-4 rounded-2xl bg-white/5 border border-white/5">
+            <p className="text-[10px] uppercase tracking-widest text-white/40 font-bold">Safe Browsing</p>
+            <p className="text-sm font-bold text-neon-green">ACTIVE</p>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+
+  const renderEditor = () => (
+    <div className="p-6 space-y-6">
+      <Card className="p-8 flex flex-col items-center gap-6">
+        <div className="w-full aspect-square rounded-2xl bg-white/5 border border-white/10 flex items-center justify-center overflow-hidden relative">
+          <img src="https://picsum.photos/seed/editor/400/400" alt="Edit" className="w-full h-full object-cover" referrerPolicy="no-referrer" />
+          <div className="absolute inset-0 bg-neon-purple/20 mix-blend-overlay" />
+        </div>
+        <div className="grid grid-cols-4 gap-4 w-full">
+          <button className="p-3 rounded-xl bg-white/5 flex flex-col items-center gap-2">
+            <Maximize2 size={18} className="text-neon-purple" />
+            <span className="text-[8px] uppercase font-bold">Crop</span>
+          </button>
+          <button className="p-3 rounded-xl bg-white/5 flex flex-col items-center gap-2">
+            <PaletteIcon size={18} className="text-neon-purple" />
+            <span className="text-[8px] uppercase font-bold">Filter</span>
+          </button>
+          <button className="p-3 rounded-xl bg-white/5 flex flex-col items-center gap-2">
+            <Sun size={18} className="text-neon-purple" />
+            <span className="text-[8px] uppercase font-bold">Bright</span>
+          </button>
+          <button className="p-3 rounded-xl bg-white/5 flex flex-col items-center gap-2">
+            <Download size={18} className="text-neon-purple" />
+            <span className="text-[8px] uppercase font-bold">Save</span>
+          </button>
+        </div>
+      </Card>
+    </div>
+  );
+
+  const renderMusic = () => (
+    <div className="p-6 space-y-6">
+      <Card className="p-8 flex flex-col items-center gap-8">
+        <div className="w-48 h-48 rounded-full bg-white/5 border-4 border-neon-green/20 flex items-center justify-center relative overflow-hidden">
+          <motion.div 
+            animate={{ rotate: 360 }}
+            transition={{ duration: 10, repeat: Infinity, ease: "linear" }}
+            className="absolute inset-0 bg-gradient-to-tr from-neon-green/20 to-transparent"
+          />
+          <MusicIcon size={64} className="text-neon-green relative z-10" />
+        </div>
+        <div className="text-center space-y-2">
+          <h3 className="text-xl font-display font-bold text-white uppercase italic">Gaming Lo-Fi Beats</h3>
+          <p className="text-sm text-white/40">Ultra Optimize X Radio</p>
+        </div>
+        <div className="flex items-center gap-8">
+          <button className="p-2 text-white/40"><Minus size={24} /></button>
+          <button className="w-16 h-16 rounded-full bg-neon-green text-bg-deep flex items-center justify-center neon-glow-green">
+            <Play size={32} fill="currentColor" />
+          </button>
+          <button className="p-2 text-white/40"><Plus size={24} /></button>
+        </div>
+      </Card>
+    </div>
+  );
+
+  const renderSocial = () => (
+    <div className="p-6 space-y-4">
+      {[1, 2, 3].map(i => (
+        <Card key={i} className="p-4 space-y-4">
+          <div className="flex items-center gap-3">
+            <div className="w-10 h-10 rounded-full bg-white/10 flex items-center justify-center text-lg">👤</div>
+            <div>
+              <h4 className="text-sm font-bold text-white">ProGamer_{i}</h4>
+              <p className="text-[10px] text-white/40 uppercase tracking-widest">2 hours ago</p>
+            </div>
+          </div>
+          <p className="text-xs text-white/80 leading-relaxed">Just optimized my device with Ultra Optimize X! My ping dropped from 120ms to 24ms. Highly recommended for all competitive players! 🔥🎮</p>
+          <div className="flex gap-4">
+            <button className="text-[10px] uppercase font-bold text-neon-orange">Like</button>
+            <button className="text-[10px] uppercase font-bold text-white/40">Comment</button>
+            <button className="text-[10px] uppercase font-bold text-white/40">Share</button>
+          </div>
+        </Card>
+      ))}
     </div>
   );
 
   const renderSettings = () => (
     <div className="space-y-6 p-6 pb-32">
       <div className="space-y-3">
-        <h3 className="text-[10px] uppercase tracking-[0.3em] text-white/40 font-bold ml-1">General</h3>
-        <Card className="p-0 overflow-hidden">
-          <div className="divide-y divide-white/5">
-            <button className="w-full flex items-center gap-4 p-4 hover:bg-white/5 transition-colors">
-              <Bell size={20} className="text-neon-cyan" />
-              <span className="flex-1 text-left text-sm font-medium">Notifications</span>
-              <ChevronRight size={16} className="text-white/20" />
-            </button>
-            <button className="w-full flex items-center gap-4 p-4 hover:bg-white/5 transition-colors">
-              <Palette size={20} className="text-neon-purple" />
-              <span className="flex-1 text-left text-sm font-medium">Theme Customization</span>
-              <ChevronRight size={16} className="text-white/20" />
-            </button>
-            <button className="w-full flex items-center gap-4 p-4 hover:bg-white/5 transition-colors">
-              <ShieldCheck size={20} className="text-neon-green" />
-              <span className="flex-1 text-left text-sm font-medium">Privacy & Security</span>
-              <ChevronRight size={16} className="text-white/20" />
-            </button>
+        <h3 className="text-[10px] uppercase tracking-[0.3em] text-white/40 font-bold ml-1">Personalization</h3>
+        <Card className="p-4 space-y-4">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-3">
+              <Palette size={20} className="text-neon-cyan" />
+              <span className="text-sm font-bold text-white">Theme Color</span>
+            </div>
+            <div className="flex gap-2">
+              {['cyan', 'purple', 'green', 'orange', 'red'].map(c => (
+                <button 
+                  key={c}
+                  onClick={() => setThemeColor(c)}
+                  className={cn(
+                    "w-6 h-6 rounded-full border transition-all",
+                    themeColor === c ? "border-white scale-110" : "border-transparent",
+                    c === 'cyan' ? "bg-neon-cyan" : 
+                    c === 'purple' ? "bg-neon-purple" : 
+                    c === 'green' ? "bg-neon-green" : 
+                    c === 'orange' ? "bg-neon-orange" : "bg-neon-red"
+                  )}
+                />
+              ))}
+            </div>
           </div>
+          <Toggle label="Push Notifications" active={true} onToggle={() => {}} />
+          <Toggle label="Auto Optimization" active={true} onToggle={() => {}} />
         </Card>
       </div>
 
       <div className="space-y-3">
-        <h3 className="text-[10px] uppercase tracking-[0.3em] text-white/40 font-bold ml-1">Support</h3>
+        <h3 className="text-[10px] uppercase tracking-[0.3em] text-white/40 font-bold ml-1">Privacy & Security</h3>
         <Card className="p-0 overflow-hidden">
           <div className="divide-y divide-white/5">
-            <button className="w-full flex items-center gap-4 p-4 hover:bg-white/5 transition-colors">
-              <HelpCircle size={20} className="text-neon-orange" />
-              <span className="flex-1 text-left text-sm font-medium">Help Center</span>
-              <ChevronRight size={16} className="text-white/20" />
-            </button>
-            <button className="w-full flex items-center gap-4 p-4 hover:bg-white/5 transition-colors">
-              <Share2 size={20} className="text-neon-cyan" />
-              <span className="flex-1 text-left text-sm font-medium">Share with Friends</span>
-              <ChevronRight size={16} className="text-white/20" />
-            </button>
-            <button className="w-full flex items-center gap-4 p-4 hover:bg-white/5 transition-colors">
-              <Star size={20} className="text-neon-yellow" />
-              <span className="flex-1 text-left text-sm font-medium">Rate Us</span>
-              <ChevronRight size={16} className="text-white/20" />
-            </button>
+            <div className="flex items-center justify-between p-4">
+              <div className="flex items-center gap-3">
+                <Lock size={20} className="text-neon-green" />
+                <span className="text-sm font-bold text-white">App Lock</span>
+              </div>
+              <Toggle active={false} onToggle={() => {}} label="" />
+            </div>
+            <div className="flex items-center justify-between p-4">
+              <div className="flex items-center gap-3">
+                <ShieldCheck size={20} className="text-neon-cyan" />
+                <span className="text-sm font-bold text-white">Safe Browsing</span>
+              </div>
+              <span className="text-[10px] text-neon-green font-bold">ACTIVE</span>
+            </div>
           </div>
         </Card>
       </div>
 
       <div className="text-center pt-6">
-        <p className="text-[10px] uppercase tracking-[0.3em] text-white/20 font-bold">Ultra Optimize X v2.0.4</p>
+        <p className="text-[10px] uppercase tracking-[0.3em] text-white/20 font-bold">Ultra Optimize X v2.0.5</p>
         <p className="text-[8px] uppercase tracking-[0.2em] text-white/10 mt-2">Designed for Pro Gamers</p>
       </div>
     </div>
@@ -841,6 +1087,7 @@ export default function App() {
 
   return (
     <ErrorBoundary>
+      <CrosshairOverlay settings={crosshair} enabled={crosshairEnabled} />
       <AnimatePresence mode="wait">
         {isLoading ? (
           <motion.div 
@@ -934,6 +1181,10 @@ export default function App() {
                   {activeTab === 'crosshair' && renderCrosshair()}
                   {activeTab === 'network' && renderNetwork()}
                   {activeTab === 'apps' && renderApps()}
+                  {activeTab === 'browser' && renderBrowser()}
+                  {activeTab === 'editor' && renderEditor()}
+                  {activeTab === 'music' && renderMusic()}
+                  {activeTab === 'social' && renderSocial()}
                   {activeTab === 'settings' && renderSettings()}
                   {['cleaner', 'battery', 'cooler'].includes(activeTab) && (
                     <div className="flex flex-col items-center justify-center h-[70vh] p-6 text-center space-y-6">
