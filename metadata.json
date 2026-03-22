@@ -1,5 +1,5 @@
 {
-  "name": "Ultra Optimize X: Free Fire Pro",
-  "description": "The ultimate gaming optimizer for Free Fire. Features GFX Tool, Sensitivity Customizer, Ping Stabilizer, and RAM/CPU/Battery optimization with a pro neon gaming UI.",
-  "requestFramePermissions": []
+  "name": "Ultra Optimize X: Pro Gaming Hub",
+  "description": "The ultimate gaming optimizer and social hub. Features GFX Tool, Real-time Stats, WhatsApp-style Chat with Groups, Game Store, and Pro Browser with a neon gaming UI.",
+  "requestFramePermissions": ["notifications", "camera", "microphone", "geolocation"]
 }

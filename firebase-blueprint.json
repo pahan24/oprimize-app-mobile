@@ -1,0 +1,63 @@
+{
+  "entities": {
+    "ChatMessage": {
+      "title": "ChatMessage",
+      "description": "A message in a group or private chat",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "text": { "type": "string" },
+        "senderId": { "type": "string" },
+        "senderName": { "type": "string" },
+        "senderPhoto": { "type": "string" },
+        "timestamp": { "type": "number" },
+        "chatId": { "type": "string", "description": "ID of the group or private chat" }
+      },
+      "required": ["text", "senderId", "senderName", "timestamp", "chatId"]
+    },
+    "ChatRoom": {
+      "title": "ChatRoom",
+      "description": "A group or private chat room",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "name": { "type": "string" },
+        "type": { "type": "string", "enum": ["private", "group"] },
+        "participants": { "type": "array", "items": { "type": "string" } },
+        "lastMessage": { "type": "string" },
+        "lastTimestamp": { "type": "number" },
+        "createdBy": { "type": "string" }
+      },
+      "required": ["type", "participants"]
+    },
+    "UserProfile": {
+      "title": "UserProfile",
+      "description": "User profile information",
+      "type": "object",
+      "properties": {
+        "uid": { "type": "string" },
+        "phoneNumber": { "type": "string" },
+        "displayName": { "type": "string" },
+        "photoURL": { "type": "string" },
+        "status": { "type": "string" },
+        "contacts": { "type": "array", "items": { "type": "string" } },
+        "lastSeen": { "type": "number" }
+      },
+      "required": ["uid", "displayName"]
+    }
+  },
+  "firestore": {
+    "chats": {
+      "schema": "ChatRoom",
+      "description": "Chat rooms (groups and private)"
+    },
+    "chats/{chatId}/messages": {
+      "schema": "ChatMessage",
+      "description": "Messages within a chat room"
+    },
+    "users/{userId}": {
+      "schema": "UserProfile",
+      "description": "Individual user profiles"
+    }
+  }
+}

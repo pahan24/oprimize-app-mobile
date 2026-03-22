@@ -26,6 +26,14 @@ export class DeviceService {
     return await Network.getStatus();
   }
 
+  static async requestPermissions(): Promise<boolean> {
+    // In a real app, we would request specific native permissions here
+    // For this web-based demo, we simulate the request
+    return new Promise(resolve => {
+      setTimeout(() => resolve(true), 1500);
+    });
+  }
+
   static async saveSettings(key: string, value: any) {
     await Preferences.set({
       key,
@@ -41,40 +49,53 @@ export class DeviceService {
   // Simulate ping based on network type
   static async getPing(status: ConnectionStatus): Promise<number> {
     if (status.connectionType === 'none') return 999;
-    if (status.connectionType === 'wifi') return 15 + Math.random() * 20;
-    return 40 + Math.random() * 40;
+    if (status.connectionType === 'wifi') return 12 + Math.random() * 15;
+    return 35 + Math.random() * 35;
   }
 
-  // Simulate RAM usage based on device info if available
-  // Webview doesn't give full system RAM usage easily, so we simulate based on memory info if available
+  // Simulate RAM usage
   static getRamUsage(): number {
     // @ts-ignore
     if (window.performance && window.performance.memory) {
       // @ts-ignore
       const memory = window.performance.memory;
-      return Math.round((memory.usedJSHeapSize / memory.jsHeapSizeLimit) * 100);
+      const usage = Math.round((memory.usedJSHeapSize / memory.jsHeapSizeLimit) * 100);
+      return Math.min(Math.max(usage, 30), 95);
     }
-    return 45 + Math.random() * 15;
+    return 42 + Math.random() * 12;
   }
 
   // Simulate CPU usage with one decimal place
   static getCpuUsage(): number {
-    const usage = 15 + Math.random() * 45;
+    const usage = 12 + Math.random() * 48;
     return parseFloat(usage.toFixed(1));
   }
 
   // Simulate CPU temperature
   static getCpuTemp(): number {
-    return Math.round(35 + Math.random() * 15);
+    return Math.round(32 + Math.random() * 18);
   }
 
   // Simulate Junk files found
   static getJunkSize(): string {
-    return (1.2 + Math.random() * 3.5).toFixed(1) + ' GB';
+    return (0.8 + Math.random() * 4.2).toFixed(1) + ' GB';
   }
 
   // Simulate optimization actions
   static async performAction(name: string, duration: number = 3000): Promise<void> {
     return new Promise(resolve => setTimeout(resolve, duration));
+  }
+
+  static async boostSystem(): Promise<void> {
+    // Simulate a deep system boost
+    return this.performAction('Boosting System', 4000);
+  }
+
+  static async cleanJunk(): Promise<void> {
+    return this.performAction('Cleaning Junk', 3500);
+  }
+
+  static async coolPhone(): Promise<void> {
+    return this.performAction('Cooling Phone', 4000);
   }
 }
