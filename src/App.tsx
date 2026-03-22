@@ -38,12 +38,21 @@ import {
   Palette,
   HelpCircle,
   Share2,
-  Star
+  Star,
+  Cpu as CpuIcon,
+  Database,
+  Wifi as WifiIcon,
+  Battery as BatteryIcon,
+  Smartphone as PhoneIcon
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import Confetti from 'react-confetti';
 import { useWindowSize } from 'react-use';
 import { cn } from './utils';
+import { DeviceService } from './services/deviceService';
+import { SplashScreen } from '@capacitor/splash-screen';
+import { Network } from '@capacitor/network';
+import { Device } from '@capacitor/device';
 
 // --- Error Boundary ---
 interface ErrorBoundaryProps {
@@ -285,13 +294,20 @@ export default function App() {
   const [activeTab, setActiveTab] = useState<Tab>('dashboard');
   const [isOptimizing, setIsOptimizing] = useState(false);
   const [showConfetti, setShowConfetti] = useState(false);
+  const [isLoading, setIsLoading] = useState(true);
+  const [loadingProgress, setLoadingProgress] = useState(0);
+  const [loadingText, setLoadingText] = useState('Initializing Pro Engine...');
   const { width, height } = useWindowSize();
   
   // Stats
   const [ramUsage, setRamUsage] = useState(64);
   const [cpuTemp, setCpuTemp] = useState(42);
   const [batteryLevel, setBatteryLevel] = useState(85);
+  const [isCharging, setIsCharging] = useState(false);
   const [ping, setPing] = useState(45);
+  const [networkType, setNetworkType] = useState('WIFI');
+  const [deviceModel, setDeviceModel] = useState('Unknown Device');
+  const [platform, setPlatform] = useState('android');
 
   // GFX Settings
   const [gfx, setGfx] = useState<GFXSettings>({
@@ -322,15 +338,97 @@ export default function App() {
     thickness: 2
   });
 
-  // Simulation Effects
+  // Simulation & Real Data Effects
   useEffect(() => {
-    const interval = setInterval(() => {
-      setRamUsage(prev => Math.min(95, Math.max(40, prev + (Math.random() * 4 - 2))));
-      setCpuTemp(prev => Math.min(85, Math.max(35, prev + (Math.random() * 2 - 1))));
-      setPing(prev => Math.min(200, Math.max(20, prev + (Math.random() * 10 - 5))));
+    const initApp = async () => {
+      try {
+        setLoadingProgress(10);
+        setLoadingText('Connecting to Hardware...');
+        
+        // Load saved settings
+        const savedGfx = await DeviceService.getSettings('gfx_settings');
+        if (savedGfx) setGfx(savedGfx);
+        setLoadingProgress(30);
+        
+        const savedSens = await DeviceService.getSettings('sens_settings');
+        if (savedSens) setSens(savedSens);
+        setLoadingProgress(50);
+        
+        const savedCrosshair = await DeviceService.getSettings('crosshair_settings');
+        if (savedCrosshair) setCrosshair(savedCrosshair);
+        setLoadingProgress(70);
+        
+        setLoadingText('Optimizing RAM Buffers...');
+        
+        // Get initial device info
+        const info = await DeviceService.getDeviceInfo();
+        setDeviceModel(`${info.manufacturer} ${info.model}`);
+        setPlatform(info.platform);
+        
+        const battery = await DeviceService.getBatteryInfo();
+        setBatteryLevel(Math.round((battery.batteryLevel || 0.85) * 100));
+        setIsCharging(battery.isCharging || false);
+        
+        const network = await DeviceService.getNetworkStatus();
+        setNetworkType(network.connectionType.toUpperCase());
+        
+        setLoadingProgress(90);
+        setLoadingText('Ready for Battle!');
+        
+        setTimeout(async () => {
+          setLoadingProgress(100);
+          setIsLoading(false);
+          await SplashScreen.hide();
+        }, 1000);
+      } catch (error) {
+        console.error("Init Error:", error);
+        setIsLoading(false);
+      }
+    };
+
+    initApp();
+
+    // Real-time updates
+    const batteryInterval = setInterval(async () => {
+      const battery = await DeviceService.getBatteryInfo();
+      setBatteryLevel(Math.round((battery.batteryLevel || 0.85) * 100));
+      setIsCharging(battery.isCharging || false);
+    }, 10000);
+
+    const statsInterval = setInterval(async () => {
+      setRamUsage(DeviceService.getRamUsage());
+      setCpuTemp(DeviceService.getCpuTemp());
+      const network = await DeviceService.getNetworkStatus();
+      setPing(await DeviceService.getPing(network));
+      setNetworkType(network.connectionType.toUpperCase());
     }, 3000);
-    return () => clearInterval(interval);
+
+    // Network listener
+    const networkListenerPromise = Network.addListener('networkStatusChange', (status) => {
+      setNetworkType(status.connectionType.toUpperCase());
+    });
+
+    return () => {
+      clearInterval(batteryInterval);
+      clearInterval(statsInterval);
+      networkListenerPromise.then(h => h.remove());
+    };
   }, []);
+
+  const saveGfx = async (newGfx: GFXSettings) => {
+    setGfx(newGfx);
+    await DeviceService.saveSettings('gfx_settings', newGfx);
+  };
+
+  const saveSens = async (newSens: SensitivitySettings) => {
+    setSens(newSens);
+    await DeviceService.saveSettings('sens_settings', newSens);
+  };
+
+  const saveCrosshair = async (newCrosshair: CrosshairSettings) => {
+    setCrosshair(newCrosshair);
+    await DeviceService.saveSettings('crosshair_settings', newCrosshair);
+  };
 
   const handleOptimize = useCallback(() => {
     setIsOptimizing(true);
@@ -358,8 +456,8 @@ export default function App() {
         <div className="absolute inset-0 bg-gradient-to-t from-bg-deep via-bg-deep/40 to-transparent" />
         <div className="absolute bottom-6 left-6 right-6 flex justify-between items-end">
           <div className="space-y-1">
-            <h2 className="text-2xl font-display font-black tracking-tighter text-white uppercase italic">Free Fire Pro</h2>
-            <p className="text-[10px] uppercase tracking-[0.3em] text-neon-cyan font-bold">Optimization Active</p>
+            <h2 className="text-2xl font-display font-black tracking-tighter text-white uppercase italic">{deviceModel}</h2>
+            <p className="text-[10px] uppercase tracking-[0.3em] text-neon-cyan font-bold">Optimization Active • {networkType}</p>
           </div>
           <motion.button 
             whileHover={{ scale: 1.05 }}
@@ -437,7 +535,7 @@ export default function App() {
           </div>
           <div className="flex-1">
             <h4 className="text-sm font-bold text-white">Battery Saver</h4>
-            <p className="text-[10px] text-white/40 uppercase tracking-wider">85% • 12h Remaining</p>
+            <p className="text-[10px] text-white/40 uppercase tracking-wider">{batteryLevel}% • {isCharging ? 'Charging' : 'Discharging'}</p>
           </div>
           <ChevronRight size={20} className="text-white/20" />
         </Card>
@@ -461,30 +559,30 @@ export default function App() {
         label="Resolution" 
         options={['960x540', '1280x720', '1920x1080', '2560x1440']} 
         selected={gfx.resolution} 
-        onSelect={(s) => setGfx({...gfx, resolution: s})} 
+        onSelect={(s) => saveGfx({...gfx, resolution: s})} 
       />
       <OptionGrid 
         label="FPS Limit" 
         options={['30 FPS', '40 FPS', '60 FPS', '90 FPS']} 
         selected={gfx.fps} 
-        onSelect={(s) => setGfx({...gfx, fps: s})} 
+        onSelect={(s) => saveGfx({...gfx, fps: s})} 
       />
       <OptionGrid 
         label="Graphics" 
         options={['Smooth', 'Balanced', 'HD', 'HDR']} 
         selected={gfx.graphics} 
-        onSelect={(s) => setGfx({...gfx, graphics: s})} 
+        onSelect={(s) => saveGfx({...gfx, graphics: s})} 
       />
       <OptionGrid 
         label="Style" 
         options={['Classic', 'Colorful', 'Realistic', 'Soft']} 
         selected={gfx.style} 
-        onSelect={(s) => setGfx({...gfx, style: s})} 
+        onSelect={(s) => saveGfx({...gfx, style: s})} 
       />
       
       <div className="space-y-3">
-        <Toggle label="Shadows" active={gfx.shadows} onToggle={() => setGfx({...gfx, shadows: !gfx.shadows})} />
-        <Toggle label="Anti-Aliasing (MSAA)" active={gfx.msaa} onToggle={() => setGfx({...gfx, msaa: !gfx.msaa})} />
+        <Toggle label="Shadows" active={gfx.shadows} onToggle={() => saveGfx({...gfx, shadows: !gfx.shadows})} />
+        <Toggle label="Anti-Aliasing (MSAA)" active={gfx.msaa} onToggle={() => saveGfx({...gfx, msaa: !gfx.msaa})} />
       </div>
 
       <motion.button 
@@ -510,12 +608,12 @@ export default function App() {
         </div>
       </div>
 
-      <Slider label="General" value={sens.general} onChange={(v) => setSens({...sens, general: v})} icon={Activity} />
-      <Slider label="Red Dot" value={sens.redDot} onChange={(v) => setSens({...sens, redDot: v})} icon={Target} />
-      <Slider label="2x Scope" value={sens.scope2x} onChange={(v) => setSens({...sens, scope2x: v})} icon={Search} />
-      <Slider label="4x Scope" value={sens.scope4x} onChange={(v) => setSens({...sens, scope4x: v})} icon={Search} />
-      <Slider label="Sniper Scope" value={sens.sniper} onChange={(v) => setSens({...sens, sniper: v})} icon={Crosshair} />
-      <Slider label="Free Look" value={sens.freeLook} onChange={(v) => setSens({...sens, freeLook: v})} icon={Activity} />
+      <Slider label="General" value={sens.general} onChange={(v) => saveSens({...sens, general: v})} icon={Activity} />
+      <Slider label="Red Dot" value={sens.redDot} onChange={(v) => saveSens({...sens, redDot: v})} icon={Target} />
+      <Slider label="2x Scope" value={sens.scope2x} onChange={(v) => saveSens({...sens, scope2x: v})} icon={Search} />
+      <Slider label="4x Scope" value={sens.scope4x} onChange={(v) => saveSens({...sens, scope4x: v})} icon={Search} />
+      <Slider label="Sniper Scope" value={sens.sniper} onChange={(v) => saveSens({...sens, sniper: v})} icon={Crosshair} />
+      <Slider label="Free Look" value={sens.freeLook} onChange={(v) => saveSens({...sens, freeLook: v})} icon={Activity} />
 
       <motion.button 
         whileHover={{ scale: 1.02 }}
@@ -550,13 +648,13 @@ export default function App() {
         label="Crosshair Type" 
         options={['Classic', 'Circle', 'Dot', 'Cross']} 
         selected={crosshair.type} 
-        onSelect={(s) => setCrosshair({...crosshair, type: s})} 
+        onSelect={(s) => saveCrosshair({...crosshair, type: s})} 
       />
 
       <div className="space-y-4">
-        <Slider label="Size" value={crosshair.size} onChange={(v) => setCrosshair({...crosshair, size: v})} min={5} max={50} />
-        <Slider label="Opacity" value={crosshair.opacity} onChange={(v) => setCrosshair({...crosshair, opacity: v})} />
-        <Slider label="Thickness" value={crosshair.thickness} onChange={(v) => setCrosshair({...crosshair, thickness: v})} min={1} max={10} />
+        <Slider label="Size" value={crosshair.size} onChange={(v) => saveCrosshair({...crosshair, size: v})} min={5} max={50} />
+        <Slider label="Opacity" value={crosshair.opacity} onChange={(v) => saveCrosshair({...crosshair, opacity: v})} />
+        <Slider label="Thickness" value={crosshair.thickness} onChange={(v) => saveCrosshair({...crosshair, thickness: v})} min={1} max={10} />
       </div>
 
       <div className="space-y-3">
@@ -565,7 +663,7 @@ export default function App() {
           {['#00f5ff', '#bf00ff', '#00ff88', '#ff6b00', '#ff0055', '#f0ff00'].map(c => (
             <button 
               key={c}
-              onClick={() => setCrosshair({...crosshair, color: c})}
+              onClick={() => saveCrosshair({...crosshair, color: c})}
               className={cn(
                 "w-10 h-10 rounded-full border-2 transition-all duration-300",
                 crosshair.color === c ? "border-white scale-110" : "border-transparent"
@@ -598,6 +696,23 @@ export default function App() {
           <p className="text-xs text-white/60">Optimizing network packets for low latency</p>
         </div>
       </Card>
+
+      <div className="space-y-3">
+        <Card className="flex items-center justify-between p-4">
+          <div className="flex items-center gap-3">
+            <WifiIcon size={20} className="text-neon-cyan" />
+            <span className="text-sm font-bold text-white">Network Type</span>
+          </div>
+          <span className="text-xs font-display font-bold text-neon-cyan">{networkType}</span>
+        </Card>
+        <Card className="flex items-center justify-between p-4">
+          <div className="flex items-center gap-3">
+            <Activity size={20} className="text-neon-purple" />
+            <span className="text-sm font-bold text-white">Packet Loss</span>
+          </div>
+          <span className="text-xs font-display font-bold text-neon-purple">0.0%</span>
+        </Card>
+      </div>
 
       <div className="space-y-3">
         <Toggle label="DNS Optimization" active={true} onToggle={() => {}} />
@@ -726,105 +841,157 @@ export default function App() {
 
   return (
     <ErrorBoundary>
-      <div className="min-h-screen bg-bg-deep text-white font-sans relative">
-        {showConfetti && width > 0 && height > 0 && (
-          <Confetti 
-            width={width} 
-            height={height} 
-            recycle={false} 
-            numberOfPieces={200} 
-            colors={['#00f5ff', '#bf00ff', '#00ff88']} 
-          />
-        )}
-      
-      {/* Background Effects */}
-      <div className="fixed inset-0 pointer-events-none overflow-hidden">
-        <div className="absolute top-[-10%] left-[-10%] w-[40%] h-[40%] bg-neon-cyan/5 blur-[120px] rounded-full" />
-        <div className="absolute bottom-[-10%] right-[-10%] w-[40%] h-[40%] bg-neon-purple/5 blur-[120px] rounded-full" />
-      </div>
-
-      <Header 
-        title={activeTab === 'dashboard' ? 'Ultra Optimize X' : activeTab.toUpperCase()} 
-        onBack={activeTab !== 'dashboard' ? () => setActiveTab('dashboard') : undefined}
-        rightElement={
-          <button className="p-2 rounded-xl bg-white/5 relative">
-            <Bell size={20} className="text-white/60" />
-            <div className="absolute top-2 right-2 w-2 h-2 bg-neon-red rounded-full neon-glow-red" />
-          </button>
-        }
-      />
-
-      <main className="max-w-md mx-auto relative z-10">
-        <AnimatePresence mode="wait">
-          <motion.div
-            key={activeTab}
-            initial={{ opacity: 0, y: 20 }}
-            animate={{ opacity: 1, y: 0 }}
-            exit={{ opacity: 0, y: -20 }}
-            transition={{ duration: 0.3 }}
+      <AnimatePresence mode="wait">
+        {isLoading ? (
+          <motion.div 
+            key="loader"
+            initial={{ opacity: 1 }}
+            exit={{ opacity: 0, scale: 1.1 }}
+            className="fixed inset-0 z-[100] bg-bg-deep flex flex-col items-center justify-center p-8"
           >
-            {activeTab === 'dashboard' && renderDashboard()}
-            {activeTab === 'gfx' && renderGFX()}
-            {activeTab === 'sensitivity' && renderSensitivity()}
-            {activeTab === 'crosshair' && renderCrosshair()}
-            {activeTab === 'network' && renderNetwork()}
-            {activeTab === 'apps' && renderApps()}
-            {activeTab === 'settings' && renderSettings()}
-            {['cleaner', 'battery', 'cooler'].includes(activeTab) && (
-              <div className="flex flex-col items-center justify-center h-[70vh] p-6 text-center space-y-6">
-                <div className="relative">
-                  <div className="absolute inset-0 bg-neon-cyan/20 blur-3xl animate-pulse" />
-                  <div className="w-48 h-48 rounded-full border-2 border-white/5 flex items-center justify-center relative">
-                    <motion.div 
-                      animate={{ rotate: 360 }}
-                      transition={{ duration: 10, repeat: Infinity, ease: "linear" }}
-                      className="absolute inset-0 rounded-full border-t-2 border-neon-cyan"
-                    />
-                    {activeTab === 'cleaner' && <Trash2 size={64} className="text-neon-cyan" />}
-                    {activeTab === 'battery' && <Battery size={64} className="text-neon-green" />}
-                    {activeTab === 'cooler' && <Thermometer size={64} className="text-neon-cyan" />}
-                  </div>
-                </div>
-                <div className="space-y-2">
-                  <h2 className="text-2xl font-display font-bold uppercase tracking-widest">
-                    {activeTab === 'cleaner' ? 'Cleaning Junk...' : activeTab === 'battery' ? 'Saving Power...' : 'Cooling Down...'}
-                  </h2>
-                  <p className="text-sm text-white/40">Optimizing system resources for peak performance</p>
-                </div>
-                <motion.button 
-                  whileHover={{ scale: 1.05 }}
-                  whileTap={{ scale: 0.95 }}
-                  onClick={handleOptimize}
-                  className="px-12 py-4 rounded-2xl bg-white/5 border border-white/10 font-bold uppercase tracking-widest text-xs"
+            <div className="absolute inset-0 cyber-grid opacity-20" />
+            <div className="relative z-10 w-full max-w-xs space-y-12">
+              <div className="flex flex-col items-center gap-4">
+                <motion.div 
+                  animate={{ 
+                    rotate: 360,
+                    scale: [1, 1.1, 1],
+                  }}
+                  transition={{ 
+                    rotate: { duration: 4, repeat: Infinity, ease: "linear" },
+                    scale: { duration: 2, repeat: Infinity, ease: "easeInOut" }
+                  }}
+                  className="w-24 h-24 rounded-3xl bg-neon-cyan/10 border-2 border-neon-cyan flex items-center justify-center neon-glow-cyan"
                 >
-                  Start Scan
-                </motion.button>
+                  <Zap size={48} className="text-neon-cyan" fill="currentColor" />
+                </motion.div>
+                <div className="text-center space-y-2">
+                  <h1 className="text-3xl font-display font-black tracking-tighter text-white uppercase italic">Ultra Optimize X</h1>
+                  <p className="text-[10px] uppercase tracking-[0.4em] text-neon-cyan font-bold">Pro Gaming Engine</p>
+                </div>
               </div>
-            )}
-          </motion.div>
-        </AnimatePresence>
-      </main>
 
-      {/* Navigation Bar */}
-      <nav className="fixed bottom-0 left-0 right-0 p-4 pb-8 bg-gradient-to-t from-bg-deep via-bg-deep/95 to-transparent z-50">
-        <div className="max-w-md mx-auto glass rounded-3xl p-2 flex justify-between items-center">
-          <NavButton icon={LayoutGrid} active={activeTab === 'dashboard'} onClick={() => setActiveTab('dashboard')} />
-          <NavButton icon={Gamepad2} active={activeTab === 'apps'} onClick={() => setActiveTab('apps')} />
-          <div className="relative -top-6">
-            <motion.button 
-              whileHover={{ scale: 1.1 }}
-              whileTap={{ scale: 0.9 }}
-              onClick={handleOptimize}
-              className="w-14 h-14 rounded-2xl bg-neon-cyan text-bg-deep flex items-center justify-center neon-glow-cyan shadow-2xl"
-            >
-              <Zap size={28} fill="currentColor" />
-            </motion.button>
-          </div>
-          <NavButton icon={Activity} active={activeTab === 'network'} onClick={() => setActiveTab('network')} />
-          <NavButton icon={Settings} active={activeTab === 'settings'} onClick={() => setActiveTab('settings')} />
-        </div>
-      </nav>
-    </div>
-  </ErrorBoundary>
-);
+              <div className="space-y-4">
+                <div className="flex justify-between items-end">
+                  <span className="text-[10px] uppercase tracking-widest text-white/40 font-bold">{loadingText}</span>
+                  <span className="text-lg font-display font-bold text-neon-cyan">{loadingProgress}%</span>
+                </div>
+                <div className="h-1.5 w-full bg-white/5 rounded-full overflow-hidden">
+                  <motion.div 
+                    initial={{ width: 0 }}
+                    animate={{ width: `${loadingProgress}%` }}
+                    className="h-full bg-neon-cyan neon-glow-cyan"
+                  />
+                </div>
+              </div>
+            </div>
+          </motion.div>
+        ) : (
+          <motion.div 
+            key="app"
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            className="min-h-screen bg-bg-deep text-white font-sans relative"
+          >
+            {showConfetti && width > 0 && height > 0 && (
+              <Confetti 
+                width={width} 
+                height={height} 
+                recycle={false} 
+                numberOfPieces={200} 
+                colors={['#00f5ff', '#bf00ff', '#00ff88']} 
+              />
+            )}
+            
+            {/* Background Effects */}
+            <div className="fixed inset-0 pointer-events-none overflow-hidden">
+              <div className="absolute top-[-10%] left-[-10%] w-[40%] h-[40%] bg-neon-cyan/5 blur-[120px] rounded-full" />
+              <div className="absolute bottom-[-10%] right-[-10%] w-[40%] h-[40%] bg-neon-purple/5 blur-[120px] rounded-full" />
+            </div>
+
+            <Header 
+              title={activeTab === 'dashboard' ? 'Ultra Optimize X' : activeTab.toUpperCase()} 
+              onBack={activeTab !== 'dashboard' ? () => setActiveTab('dashboard') : undefined}
+              rightElement={
+                <button onClick={() => setActiveTab('settings')} className="p-2 rounded-xl bg-white/5 relative">
+                  <Settings size={20} className={activeTab === 'settings' ? 'text-neon-cyan' : 'text-white/60'} />
+                </button>
+              }
+            />
+
+            <main className="max-w-md mx-auto relative z-10">
+              <AnimatePresence mode="wait">
+                <motion.div
+                  key={activeTab}
+                  initial={{ opacity: 0, y: 20 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  exit={{ opacity: 0, y: -20 }}
+                  transition={{ duration: 0.3 }}
+                >
+                  {activeTab === 'dashboard' && renderDashboard()}
+                  {activeTab === 'gfx' && renderGFX()}
+                  {activeTab === 'sensitivity' && renderSensitivity()}
+                  {activeTab === 'crosshair' && renderCrosshair()}
+                  {activeTab === 'network' && renderNetwork()}
+                  {activeTab === 'apps' && renderApps()}
+                  {activeTab === 'settings' && renderSettings()}
+                  {['cleaner', 'battery', 'cooler'].includes(activeTab) && (
+                    <div className="flex flex-col items-center justify-center h-[70vh] p-6 text-center space-y-6">
+                      <div className="relative">
+                        <div className="absolute inset-0 bg-neon-cyan/20 blur-3xl animate-pulse" />
+                        <div className="w-48 h-48 rounded-full border-2 border-white/5 flex items-center justify-center relative">
+                          <motion.div 
+                            animate={{ rotate: 360 }}
+                            transition={{ duration: 10, repeat: Infinity, ease: "linear" }}
+                            className="absolute inset-0 rounded-full border-t-2 border-neon-cyan"
+                          />
+                          {activeTab === 'cleaner' && <Trash2 size={64} className="text-neon-cyan" />}
+                          {activeTab === 'battery' && <BatteryIcon size={64} className="text-neon-green" />}
+                          {activeTab === 'cooler' && <Thermometer size={64} className="text-neon-cyan" />}
+                        </div>
+                      </div>
+                      <div className="space-y-2">
+                        <h2 className="text-2xl font-display font-bold uppercase tracking-widest">
+                          {activeTab === 'cleaner' ? 'Cleaning Junk...' : activeTab === 'battery' ? 'Saving Power...' : 'Cooling Down...'}
+                        </h2>
+                        <p className="text-sm text-white/40">Optimizing system resources for peak performance</p>
+                      </div>
+                      <motion.button 
+                        whileHover={{ scale: 1.05 }}
+                        whileTap={{ scale: 0.95 }}
+                        onClick={handleOptimize}
+                        className="px-12 py-4 rounded-2xl bg-white/5 border border-white/10 font-bold uppercase tracking-widest text-xs"
+                      >
+                        Start Scan
+                      </motion.button>
+                    </div>
+                  )}
+                </motion.div>
+              </AnimatePresence>
+            </main>
+
+            {/* Navigation Bar */}
+            <nav className="fixed bottom-0 left-0 right-0 p-4 pb-8 bg-gradient-to-t from-bg-deep via-bg-deep/95 to-transparent z-50">
+              <div className="max-w-md mx-auto glass rounded-3xl p-2 flex justify-between items-center">
+                <NavButton icon={LayoutGrid} active={activeTab === 'dashboard'} onClick={() => setActiveTab('dashboard')} />
+                <NavButton icon={PhoneIcon} active={activeTab === 'apps'} onClick={() => setActiveTab('apps')} />
+                <div className="relative -top-6">
+                  <motion.button 
+                    whileHover={{ scale: 1.1 }}
+                    whileTap={{ scale: 0.9 }}
+                    onClick={handleOptimize}
+                    className="w-14 h-14 rounded-2xl bg-neon-cyan text-bg-deep flex items-center justify-center neon-glow-cyan shadow-2xl"
+                  >
+                    <Zap size={28} fill="currentColor" />
+                  </motion.button>
+                </div>
+                <NavButton icon={Activity} active={activeTab === 'network'} onClick={() => setActiveTab('network')} />
+                <NavButton icon={Settings} active={activeTab === 'settings'} onClick={() => setActiveTab('settings')} />
+              </div>
+            </nav>
+          </motion.div>
+        )}
+      </AnimatePresence>
+    </ErrorBoundary>
+  );
 }
